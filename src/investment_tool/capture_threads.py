@@ -636,7 +636,7 @@ def render_thread_html(
 def render_index(path: Path, entries: list[dict], title: str = "AJ Thread Capture Index") -> None:
     rows = "\n".join(
         f"<tr>"
-        f"<td><span class='rel-time' data-ts='{html.escape(e.get('captured_at', e['date']))}' title='{html.escape(e['date'])}'>{html.escape(e['date'])}</span></td>"
+        f"<td><span class='rel-time' data-ts='{html.escape(e['date'])}' title='{html.escape(e['date'])}'>{html.escape(e['date'])}</span></td>"
         f"<td>{html.escape(e['label'])}</td>"
         f"<td><a href='{html.escape(os.path.relpath(e['abs_path'], path.parent))}'>{html.escape(e['title'])}</a></td>"
         f"<td>{html.escape(e['type'])}</td><td>{html.escape(', '.join(e['tickers']) or 'none')}</td>"
