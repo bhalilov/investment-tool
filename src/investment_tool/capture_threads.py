@@ -125,13 +125,14 @@ def load_cached_threads(
     tweets: dict[str, dict],
     users: dict[str, dict],
     media: dict[str, dict],
-) -> set[str]:
+) -> dict[str, set[str]]:
     """Load all previously captured thread JSONs into the in-memory dicts.
 
-    Returns the set of conversation IDs that are already cached so the caller
-    can skip re-fetching them from the X API.
+    Returns a mapping of conversation_id -> set of tweet IDs that were in the
+    cache, so the caller can detect whether new replies have arrived since the
+    last capture.
     """
-    cached: set[str] = set()
+    cached: dict[str, set[str]] = {}
     for json_path in sorted(json_dir.glob("*.json")):
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
@@ -140,11 +141,13 @@ def load_cached_threads(
         conv_id = data.get("conversation_id")
         if not conv_id:
             continue
+        tweet_ids: set[str] = set()
         for tweet in data.get("tweets") or []:
             tweets[tweet["id"]] = tweet
+            tweet_ids.add(tweet["id"])
         users.update(data.get("users") or {})
         media.update(data.get("media") or {})
-        cached.add(conv_id)
+        cached[conv_id] = tweet_ids
     return cached
 
 
@@ -717,10 +720,10 @@ def main() -> int:
     users: dict[str, dict] = {}
     media: dict[str, dict] = {}
 
-    cached_conversation_ids = load_cached_threads(json_dir, tweets, users, media)
+    cached_tweet_ids = load_cached_threads(json_dir, tweets, users, media)
+    cached_conversation_ids = set(cached_tweet_ids.keys())
     if cached_conversation_ids:
-        skipping = "re-fetching" if args.force else "skipping"
-        print(f"CACHED={len(cached_conversation_ids)} threads found locally ({skipping})")
+        print(f"CACHED={len(cached_conversation_ids)} threads found locally")
 
     seed_ids = fetch_timeline(client, args.timeline_pages, tweets, users, media)
     if args.conversation_id:
@@ -741,9 +744,17 @@ def main() -> int:
             if len(conversation_ids) >= args.max_threads:
                 break
 
+    # A cached thread has new replies if the timeline fetch introduced tweet IDs
+    # that weren't in the stored JSON. Those threads need a full conversation
+    # search so we pick up any replies we haven't seen yet.
+    def has_new_tweets(conv_id: str) -> bool:
+        known = cached_tweet_ids.get(conv_id, set())
+        current = {tid for tid, t in tweets.items() if t.get("conversation_id") == conv_id}
+        return bool(current - known)
+
     search_counts: dict[str, int] = {}
     for conversation_id in conversation_ids:
-        if not args.force and conversation_id in cached_conversation_ids:
+        if not args.force and conversation_id in cached_conversation_ids and not has_new_tweets(conversation_id):
             search_counts[conversation_id] = 0
             continue
         search_counts[conversation_id] = search_conversation(
@@ -775,7 +786,7 @@ def main() -> int:
         filename = f"{prefix}__{label}__{slug}__{conversation_id}.html"
         html_path = threads_dir / filename
         json_path = json_dir / f"{prefix}__{label}__{slug}__{conversation_id}.json"
-        is_cached = not args.force and conversation_id in cached_conversation_ids
+        is_cached = not args.force and conversation_id in cached_conversation_ids and not has_new_tweets(conversation_id)
         if not is_cached:
             render_thread_html(
                 html_path,
