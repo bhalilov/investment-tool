@@ -120,6 +120,34 @@ X_STATUS_RE = re.compile(r"https?://(?:mobile\.)?(?:x|twitter)\.com/[^/\s]+/stat
 DEFAULT_X_POST_READ_COST_USD = 0.005
 
 
+def load_cached_threads(
+    json_dir: Path,
+    tweets: dict[str, dict],
+    users: dict[str, dict],
+    media: dict[str, dict],
+) -> set[str]:
+    """Load all previously captured thread JSONs into the in-memory dicts.
+
+    Returns the set of conversation IDs that are already cached so the caller
+    can skip re-fetching them from the X API.
+    """
+    cached: set[str] = set()
+    for json_path in sorted(json_dir.glob("*.json")):
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        conv_id = data.get("conversation_id")
+        if not conv_id:
+            continue
+        for tweet in data.get("tweets") or []:
+            tweets[tweet["id"]] = tweet
+        users.update(data.get("users") or {})
+        media.update(data.get("media") or {})
+        cached.add(conv_id)
+    return cached
+
+
 def load_env(path: Path) -> None:
     if not path.exists():
         return
@@ -666,6 +694,7 @@ def main() -> int:
     parser.add_argument("--conversation-pages", type=int, default=5)
     parser.add_argument("--max-threads", type=int, default=20)
     parser.add_argument("--conversation-id")
+    parser.add_argument("--force", action="store_true", help="Re-fetch and overwrite already-cached threads")
     args = parser.parse_args()
 
     load_env(Path.cwd() / ".env")
@@ -688,6 +717,11 @@ def main() -> int:
     users: dict[str, dict] = {}
     media: dict[str, dict] = {}
 
+    cached_conversation_ids = load_cached_threads(json_dir, tweets, users, media)
+    if cached_conversation_ids:
+        skipping = "re-fetching" if args.force else "skipping"
+        print(f"CACHED={len(cached_conversation_ids)} threads found locally ({skipping})")
+
     seed_ids = fetch_timeline(client, args.timeline_pages, tweets, users, media)
     if args.conversation_id:
         seed_ids.append(args.conversation_id)
@@ -709,6 +743,9 @@ def main() -> int:
 
     search_counts: dict[str, int] = {}
     for conversation_id in conversation_ids:
+        if not args.force and conversation_id in cached_conversation_ids:
+            search_counts[conversation_id] = 0
+            continue
         search_counts[conversation_id] = search_conversation(
             client, conversation_id, tweets, users, media, args.conversation_pages
         )
@@ -738,48 +775,51 @@ def main() -> int:
         filename = f"{prefix}__{label}__{slug}__{conversation_id}.html"
         html_path = threads_dir / filename
         json_path = json_dir / f"{prefix}__{label}__{slug}__{conversation_id}.json"
-        render_thread_html(
-            html_path,
-            conversation_id,
-            title,
-            thread_type,
-            label,
-            tickers,
-            tags,
-            tldr,
-            json_path,
-            items,
-            users,
-            media,
-            media_paths,
-            search_counts.get(conversation_id, 0),
-            root,
-        )
-        json_path.write_text(
-            json.dumps(
-                {
-                    "conversation_id": conversation_id,
-                    "title": title,
-                    "canonical_filename": filename,
-                    "type": thread_type,
-                    "primary_label": label,
-                    "tickers": tickers,
-                    "tags": tags,
-                    "priority": "UNCLASSIFIED",
-                    "tldr": tldr,
-                    "completeness_status": "conversation_search_partial",
-                    "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-                    "tweets": items,
-                    "users": users,
-                    "media": {k: v for k, v in media.items() if k in {mk for item in items for mk in media_keys(item)}},
-                    "media_paths": media_paths,
-                    "rate_limits": client.rate_limits,
-                },
-                indent=2,
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+        is_cached = not args.force and conversation_id in cached_conversation_ids
+        if not is_cached:
+            render_thread_html(
+                html_path,
+                conversation_id,
+                title,
+                thread_type,
+                label,
+                tickers,
+                tags,
+                tldr,
+                json_path,
+                items,
+                users,
+                media,
+                media_paths,
+                search_counts.get(conversation_id, 0),
+                root,
+            )
+        if not is_cached:
+            json_path.write_text(
+                json.dumps(
+                    {
+                        "conversation_id": conversation_id,
+                        "title": title,
+                        "canonical_filename": filename,
+                        "type": thread_type,
+                        "primary_label": label,
+                        "tickers": tickers,
+                        "tags": tags,
+                        "priority": "UNCLASSIFIED",
+                        "tldr": tldr,
+                        "completeness_status": "conversation_search_partial",
+                        "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                        "tweets": items,
+                        "users": users,
+                        "media": {k: v for k, v in media.items() if k in {mk for item in items for mk in media_keys(item)}},
+                        "media_paths": media_paths,
+                        "rate_limits": client.rate_limits,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
         entries.append(
             {
                 "type": thread_type,
