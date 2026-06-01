@@ -883,6 +883,39 @@ def main() -> int:
             }
         )
 
+    # Include all cached threads that weren't in this run's conversation_ids
+    # so the index always shows the full archive, not just the last N threads.
+    processed_ids = {e["conversation_id"] for e in entries}
+    for json_path in sorted(json_dir.glob("*.json")):
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        conv_id = data.get("conversation_id")
+        if not conv_id or conv_id in processed_ids:
+            continue
+        filename = data.get("canonical_filename", "")
+        html_path = threads_dir / filename if filename else None
+        if not html_path or not html_path.exists():
+            continue
+        date = data.get("captured_at", "")[:10]
+        entries.append(
+            {
+                "type": data.get("type", ""),
+                "title": data.get("title", conv_id),
+                "date": date,
+                "captured_at": data.get("captured_at", date),
+                "label": data.get("primary_label", "UNKNOWN"),
+                "tickers": data.get("tickers", []),
+                "tags": data.get("tags", []),
+                "conversation_id": conv_id,
+                "abs_path": str(html_path),
+                "posts": len(data.get("tweets", [])),
+                "aj_posts": sum(1 for t in data.get("tweets", []) if t.get("author_id") == AJ_USER_ID),
+                "photos": sum(len(media_keys(t)) for t in data.get("tweets", [])),
+            }
+        )
+
     render_all_indexes(root, entries)
     usage = write_usage_estimate(root, run_id, client)
     print(f"INDEX={root / 'indexes' / 'index.html'}")
