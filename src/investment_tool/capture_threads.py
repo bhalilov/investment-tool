@@ -604,7 +604,7 @@ def render_thread_html(
 
 def render_index(path: Path, entries: list[dict], title: str = "AJ Thread Capture Index") -> None:
     rows = "\n".join(
-        f"<tr><td>{html.escape(e['date'])}</td><td>{html.escape(e['label'])}</td><td><a href='{html.escape(e['relative'])}'>{html.escape(e['title'])}</a></td>"
+        f"<tr><td>{html.escape(e['date'])}</td><td>{html.escape(e['label'])}</td><td><a href='{html.escape(os.path.relpath(e['abs_path'], path.parent))}'>{html.escape(e['title'])}</a></td>"
         f"<td>{html.escape(e['type'])}</td><td>{html.escape(', '.join(e['tickers']) or 'none')}</td>"
         f"<td>{html.escape(', '.join(e['tags']))}</td><td>{e['posts']}</td><td>{e['aj_posts']}</td><td>{e['photos']}</td></tr>"
         for e in entries
@@ -789,7 +789,7 @@ def main() -> int:
                 "tickers": tickers,
                 "tags": tags,
                 "conversation_id": conversation_id,
-                "relative": str(html_path.relative_to(root)),
+                "abs_path": str(html_path),
                 "posts": len(items),
                 "aj_posts": sum(1 for item in items if item.get("author_id") == AJ_USER_ID),
                 "photos": sum(len(media_keys(item)) for item in items),
