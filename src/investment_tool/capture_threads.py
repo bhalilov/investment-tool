@@ -635,20 +635,44 @@ def render_thread_html(
 
 def render_index(path: Path, entries: list[dict], title: str = "AJ Thread Capture Index") -> None:
     rows = "\n".join(
-        f"<tr><td>{html.escape(e['date'])}</td><td>{html.escape(e['label'])}</td><td><a href='{html.escape(os.path.relpath(e['abs_path'], path.parent))}'>{html.escape(e['title'])}</a></td>"
+        f"<tr>"
+        f"<td><span class='rel-time' data-ts='{html.escape(e.get('captured_at', e['date']))}' title='{html.escape(e['date'])}'>{html.escape(e['date'])}</span></td>"
+        f"<td>{html.escape(e['label'])}</td>"
+        f"<td><a href='{html.escape(os.path.relpath(e['abs_path'], path.parent))}'>{html.escape(e['title'])}</a></td>"
         f"<td>{html.escape(e['type'])}</td><td>{html.escape(', '.join(e['tickers']) or 'none')}</td>"
-        f"<td>{html.escape(', '.join(e['tags']))}</td><td>{e['posts']}</td><td>{e['aj_posts']}</td><td>{e['photos']}</td></tr>"
+        f"<td>{html.escape(', '.join(e['tags']))}</td><td>{e['posts']}</td><td>{e['aj_posts']}</td><td>{e['photos']}</td>"
+        f"</tr>"
         for e in entries
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>{html.escape(title)}</title>
-<style>body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:24px;color:#17202a}}
-table{{border-collapse:collapse}}td,th{{border:1px solid #d8e0e8;padding:7px 9px;text-align:left}}</style></head>
+<style>
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:24px;color:#17202a}}
+table{{border-collapse:collapse}}td,th{{border:1px solid #d8e0e8;padding:7px 9px;text-align:left}}
+.rel-time{{white-space:nowrap;color:#536471;font-size:13px}}
+</style></head>
 <body><h1>{html.escape(title)}</h1><table>
-<tr><th>Date</th><th>Label</th><th>Thread</th><th>Type</th><th>Tickers</th><th>Tags</th><th>Posts</th><th>AJ Posts</th><th>Photos</th></tr>
-{rows}</table></body></html>""",
+<tr><th>Captured</th><th>Label</th><th>Thread</th><th>Type</th><th>Tickers</th><th>Tags</th><th>Posts</th><th>AJ Posts</th><th>Photos</th></tr>
+{rows}</table>
+<script>
+function relTime(iso) {{
+  const diff = (Date.now() - new Date(iso)) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + ' min ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  if (diff < 86400*2) return 'yesterday';
+  if (diff < 86400*7) return Math.floor(diff/86400) + ' days ago';
+  if (diff < 86400*30) return Math.floor(diff/86400/7) + ' weeks ago';
+  return new Date(iso).toLocaleDateString();
+}}
+document.querySelectorAll('.rel-time').forEach(el => {{
+  const ts = el.dataset.ts;
+  if (ts) el.textContent = relTime(ts);
+}});
+</script>
+</body></html>""",
         encoding="utf-8",
     )
 
@@ -831,11 +855,23 @@ def main() -> int:
                 ),
                 encoding="utf-8",
             )
+        # For cached threads read captured_at from the existing JSON so
+        # relative-time display in the index stays accurate across runs.
+        if is_cached:
+            try:
+                captured_at = json.loads(json_path.read_text(encoding="utf-8")).get(
+                    "captured_at", dt.datetime.now(dt.timezone.utc).isoformat()
+                )
+            except Exception:
+                captured_at = dt.datetime.now(dt.timezone.utc).isoformat()
+        else:
+            captured_at = dt.datetime.now(dt.timezone.utc).isoformat()
         entries.append(
             {
                 "type": thread_type,
                 "title": title,
                 "date": f"{prefix[:4]}-{prefix[4:6]}-{prefix[6:8]}",
+                "captured_at": captured_at,
                 "label": label,
                 "tickers": tickers,
                 "tags": tags,
