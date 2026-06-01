@@ -1,0 +1,2 @@
+"""Investment tool package."""
+

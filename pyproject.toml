@@ -1,0 +1,12 @@
+[project]
+name = "investment-tool"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Local AJ Investment Research capture and analysis tool"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
