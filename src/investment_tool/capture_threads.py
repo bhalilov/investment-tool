@@ -898,13 +898,16 @@ def main() -> int:
         html_path = threads_dir / filename if filename else None
         if not html_path or not html_path.exists():
             continue
-        date = data.get("captured_at", "")[:10]
+        # Date from filename prefix (YYYYMMDD__...) is the tweet date.
+        # captured_at reflects script run time so we don't use it here.
+        prefix = json_path.stem.split("__")[0]
+        date = f"{prefix[:4]}-{prefix[4:6]}-{prefix[6:8]}" if len(prefix) == 8 else data.get("captured_at", "")[:10]
         entries.append(
             {
                 "type": data.get("type", ""),
                 "title": data.get("title", conv_id),
                 "date": date,
-                "captured_at": data.get("captured_at", date),
+                "captured_at": date,
                 "label": data.get("primary_label", "UNKNOWN"),
                 "tickers": data.get("tickers", []),
                 "tags": data.get("tags", []),
