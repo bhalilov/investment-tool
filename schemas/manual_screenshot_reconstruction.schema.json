@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "bundle_id": { "type": "string" },
+    "reconstructed_threads": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "thread_key": { "type": "string" },
+          "root_author": { "type": "string" },
+          "root_username": { "type": "string" },
+          "root_text": { "type": "string" },
+          "posts": {
+            "type": "array",
+            "maxItems": 80,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "author": { "type": "string" },
+                "username": { "type": "string" },
+                "timestamp_text": { "type": "string" },
+                "text": { "type": "string" },
+                "is_source_account": { "type": "boolean" },
+                "source_image": { "type": "string" }
+              },
+              "required": ["author", "username", "timestamp_text", "text", "is_source_account", "source_image"]
+            }
+          },
+          "overlap_notes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "uncertainties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": [
+          "thread_key",
+          "root_author",
+          "root_username",
+          "root_text",
+          "posts",
+          "overlap_notes",
+          "uncertainties"
+        ]
+      }
+    }
+  },
+  "required": ["bundle_id", "reconstructed_threads"]
+}

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "module_id": "x_capture",
+      "platform": "x",
+      "kind": "social_capture",
+      "entrypoint": "investment_tool.capture_threads",
+      "source_config": "config/sources/x_accounts.json",
+      "supports": [
+        "live_capture",
+        "raw_api_rebuild",
+        "missing_media_recovery",
+        "photo_media_download",
+        "non_photo_placeholders"
+      ]
+    },
+    {
+      "module_id": "hardcore_articles",
+      "platform": "web_archive",
+      "kind": "article_archive",
+      "entrypoint": "investment_tool.hardcore_capture",
+      "source_config": "config/sources/web_archives.json",
+      "supports": [
+        "manual_archive_ingest",
+        "text_only_ai_analysis"
+      ]
+    },
+    {
+      "module_id": "manual_screenshot_threads",
+      "platform": "manual_screenshots",
+      "kind": "manual_capture",
+      "entrypoint": "investment_tool.manual_threads",
+      "supports": [
+        "screenshot_bundle_import",
+        "overlap_stitching_ai_reconstruction"
+      ]
+    },
+    {
+      "module_id": "market_prices",
+      "platform": "market_data",
+      "kind": "context_data",
+      "entrypoint": "investment_tool.market_prices",
+      "supports": [
+        "daily_ohlcv",
+        "usd_conversion"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "default_source_id": "x_research_account_001",
+  "sources": [
+    {
+      "source_id": "x_research_account_001",
+      "platform": "x",
+      "module": "x_capture",
+      "enabled": true,
+      "account": {
+        "username": "alojohhardcore",
+        "alternate_usernames": [
+          "alojoh"
+        ],
+        "user_id": "2033476611149066240",
+        "display_name": "AJ Investment Research"
+      },
+      "storage": {
+        "data_root": "/Users/burhanhalilov/investment-tool-data/x_threads"
+      },
+      "thread_rules": "config/rules/thread_reconstruction.default.json",
+      "media_rules": "config/rules/media.default.json",
+      "user_specifics": {
+        "domain": "professional trader/investment research",
+        "language_style": [
+          "Uses professional trading, valuation, portfolio, and market-structure terminology.",
+          "Often uses shorthand and assumes reader familiarity with the Hardcore site, dashboard tools, share-price corridor work, and prior calls.",
+          "May answer valuable questions in replies where the answer is not tightly related to the root post."
+        ],
+        "behavioral_interpretation_notes": [
+          "May be sarcastic, mocking, irritated, dismissive, confusing, secretive, or manipulative.",
+          "Do not treat sarcastic praise or mockery as literal bullishness.",
+          "When tone is unclear, mark uncertainty and preserve evidence rather than forcing a final stance.",
+          "Flag cases where extra context is needed to distinguish literal statement from sarcasm, quote, or bait."
+        ],
+        "portfolio_interpretation_notes": [
+          "Portfolio disclosures are usually vague and partial.",
+          "Treat phrases like we bought, we trimmed, largest position, third largest position, coverage, conviction, or risk/reward as timeline evidence, not exact holdings.",
+          "Do not infer exact share counts, weights, or full portfolio composition unless explicitly stated.",
+          "Portfolio and signal timeline reconstruction should happen after enough context exists, not in a first-pass isolated thread judgment."
+        ],
+        "cross_reference_notes": [
+          "Often cites the Hardcore/Ghost site; treat it as useful but potentially stale context.",
+          "Often references other X posts or previous explanations; mark linked-context needs when references are unresolved.",
+          "Read oldest to newest when reconstructing context."
+        ],
+        "linked_context_domains": [
+          "ghost.io",
+          "aj-investment-research.ghost.io"
+        ],
+        "legacy_evidence_headings": {
+          "source_posts": [
+            "AJ Posts"
+          ],
+          "questions_answered": [
+            "Questions AJ Answered"
+          ]
+        },
+        "coverage_notes": [
+          "Frequently discusses AI, semiconductors, EVs, megacap tech, portfolio management, market indices, and share-price corridor/dashboard tools.",
+          "Ticker/company identity may be implied by screenshots, prior context, or dashboard/tool references."
+        ]
+      }
+    }
+  ]
+}

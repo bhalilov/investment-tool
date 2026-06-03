@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""Describe downloaded X media files with a neutral visual-analysis pass."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import datetime as dt
+import hashlib
+import json
+import mimetypes
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+from investment_tool.openai_api import call_responses_json
+from investment_tool.reporting import estimate_openai_cost_usd, start_reporter
+from investment_tool.runtime import load_env
+from investment_tool.source_config import SourceProfile, load_prompt, load_x_source_profile, read_json, source_identity
+
+
+DEFAULT_DATA_DIR = Path("~/investment-tool-data").expanduser()
+DEFAULT_MEDIA_DIR = DEFAULT_DATA_DIR / "x_threads" / "media"
+DEFAULT_OUTPUT_DIR = DEFAULT_DATA_DIR / "x_threads" / "media_analysis"
+DEFAULT_OPENAI_MODEL = "gpt-5.5"
+DEFAULT_PROMPT_PATH = "prompts/media_description.md"
+DEFAULT_SCHEMA_PATH = "schemas/media_description.schema.json"
+SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+SOURCE_PROFILE: SourceProfile = load_x_source_profile()
+
+
+def configure_source(profile: SourceProfile) -> None:
+    global SOURCE_PROFILE
+    SOURCE_PROFILE = profile
+
+
+def iso_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def media_key(path: Path) -> str:
+    return path.stem
+
+
+def media_fingerprint(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def media_output_path(output_dir: Path, path: Path) -> Path:
+    return output_dir / f"{media_key(path)}.json"
+
+
+def iter_media_paths(media_dir: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in media_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
+    )
+
+
+def image_data_url(path: Path) -> str:
+    mime_type = mimetypes.guess_type(path.name)[0] or "image/jpeg"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def load_existing(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def should_skip(path: Path, out_path: Path, force: bool) -> bool:
+    if force:
+        return False
+    existing = load_existing(out_path)
+    if not existing:
+        return False
+    return existing.get("file_sha256") == media_fingerprint(path) and bool(existing.get("analysis"))
+
+
+def build_media_prompt(path: Path, prompt_text: str) -> str:
+    return "\n".join(
+        [
+            prompt_text.strip(),
+            "",
+            f"Media file: {path.name}",
+            f"Media key: {media_key(path)}",
+        ]
+    )
+
+
+def analyze_media_with_openai(
+    path: Path,
+    model: str,
+    prompt_text: str,
+    schema: dict[str, Any],
+) -> dict[str, Any] | None:
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return None
+    analysis, _ = call_responses_json(
+        api_key=api_key,
+        model=model,
+        system_prompt=(
+            "You perform neutral OCR and visual description for investment screenshots. "
+            "Never infer trading action or source-account intent. Output valid JSON only."
+        ),
+        user_content=[
+            {"type": "input_text", "text": build_media_prompt(path, prompt_text)},
+            {"type": "input_image", "image_url": image_data_url(path)},
+        ],
+        schema_name="media_visual_observation",
+        schema=schema,
+        max_output_tokens=1800,
+        timeout=90,
+    )
+    return analysis
+
+
+def build_record(path: Path, analysis: dict[str, Any] | None, model: str) -> dict[str, Any]:
+    stat = path.stat()
+    return {
+        "media_key": media_key(path),
+        "source_path": str(path),
+        "filename": path.name,
+        "mime_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        "file_size": stat.st_size,
+        "file_sha256": media_fingerprint(path),
+        "analysis_stage": "media_visual_observation",
+        "authority": "visual_extraction",
+        "ocr_or_description_only": True,
+        "model": model,
+        "source": source_identity(SOURCE_PROFILE),
+        "analyzed_at": iso_now() if analysis else "",
+        "analysis": analysis,
+    }
+
+
+def sync_media_analysis(args: argparse.Namespace) -> int:
+    load_env(Path(args.env).expanduser())
+    configure_source(load_x_source_profile(args.source_config, args.source_id))
+    model = args.model or os.environ.get("OPENAI_MEDIA_MODEL") or DEFAULT_OPENAI_MODEL
+    prompt = load_prompt(args.prompt)
+    schema = read_json(args.schema)
+    media_dir = Path(args.media_dir).expanduser()
+    output_dir = Path(args.output_dir).expanduser()
+    paths = iter_media_paths(media_dir)
+    if args.media_key:
+        wanted = {key.strip() for key in args.media_key if key.strip()}
+        paths = [path for path in paths if media_key(path) in wanted]
+    if args.limit:
+        paths = paths[: args.limit]
+    reporter = start_reporter(
+        "media_analysis",
+        total=len(paths),
+        every_items=10,
+        every_seconds=30,
+        mode="dry_run" if args.dry_run else "sync",
+        media_dir=media_dir,
+        output_dir=output_dir,
+        model=model,
+        prompt_path=prompt["path"],
+        prompt_sha256=prompt["sha256"],
+        schema=args.schema,
+    )
+    stats = {
+        "seen": 0,
+        "analyzed": 0,
+        "skipped": 0,
+        "failed": 0,
+        "written": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
+    if not args.dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    for path in paths:
+        stats["seen"] += 1
+        out_path = media_output_path(output_dir, path)
+        try:
+            if should_skip(path, out_path, args.force):
+                stats["skipped"] += 1
+                continue
+            if args.dry_run:
+                print(f"Would analyze {path} -> {out_path}")
+                stats["skipped"] += 1
+                continue
+            analysis = analyze_media_with_openai(path, model, prompt["text"], schema)
+            if not analysis:
+                stats["failed"] += 1
+                continue
+            analysis["input_fingerprint"] = media_fingerprint(path)
+            stats["analyzed"] += 1
+            stats["input_tokens"] += int(analysis.get("_input_tokens") or 0)
+            stats["output_tokens"] += int(analysis.get("_output_tokens") or 0)
+            record = build_record(path, analysis, model)
+            out_path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            stats["written"] += 1
+            reporter.checkpoint_stats(stats, processed=stats["seen"], path=path.name)
+        except Exception as exc:
+            stats["failed"] += 1
+            print(f"ERROR: Failed to analyze media {path}: {exc}", file=sys.stderr)
+    cost = estimate_openai_cost_usd(model, stats["input_tokens"], stats["output_tokens"])
+    manifest = {
+        "generated_at": iso_now(),
+        "media_dir": str(media_dir),
+        "output_dir": str(output_dir),
+        "model": model,
+        "prompt_path": prompt["path"],
+        "prompt_sha256": prompt["sha256"],
+        "schema": args.schema,
+        **stats,
+        "estimated_openai_cost_usd": cost,
+    }
+    if not args.dry_run:
+        (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    reporter.done(**manifest)
+    for key, value in manifest.items():
+        print(f"{key.upper()}={value}")
+    return 0 if stats["failed"] == 0 else 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Analyze downloaded X media into reusable neutral visual descriptions.")
+    parser.add_argument("--media-dir", default=str(DEFAULT_MEDIA_DIR))
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--env", default=".env")
+    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
+    parser.add_argument("--source-id", default="")
+    parser.add_argument("--model", default="")
+    parser.add_argument("--prompt", default=DEFAULT_PROMPT_PATH)
+    parser.add_argument("--schema", default=DEFAULT_SCHEMA_PATH)
+    parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--media-key", action="append", default=[], help="Analyze only this media key; may be repeated.")
+    parser.add_argument("--force", action="store_true", help="Re-analyze even when output exists for the same image hash.")
+    parser.add_argument("--dry-run", action="store_true")
+    return sync_media_analysis(parser.parse_args())
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

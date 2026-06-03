@@ -1,0 +1,64 @@
+{
+  "start_date": "2026-03-01",
+  "notes": [
+    "Primary source is Massive for US-listed equities and ADRs.",
+    "Non-US primary listings use Yahoo chart data when Massive does not provide bars.",
+    "Robinhood symbols were checked with Robinhood instrument search on 2026-06-02.",
+    "International companies keep their local primary listing when useful, plus the Robinhood symbol when Robinhood exposes a different US/ADR instrument.",
+    "Samsung Electronics and SK Hynix did not resolve to direct Robinhood company instruments; keep local KRX prices only unless a Robinhood instrument is later confirmed."
+  ],
+  "companies": [
+    {"name": "Alphabet", "primary": "GOOGL", "robinhood_symbol": "GOOGL", "robinhood_status": "matched", "listings": [{"symbol": "GOOGL", "market": "US", "role": "primary"}]},
+    {"name": "Amazon", "primary": "AMZN", "robinhood_symbol": "AMZN", "robinhood_status": "matched", "listings": [{"symbol": "AMZN", "market": "US", "role": "primary"}]},
+    {"name": "AMD", "primary": "AMD", "robinhood_symbol": "AMD", "robinhood_status": "matched", "listings": [{"symbol": "AMD", "market": "US", "role": "primary"}]},
+    {"name": "Apple", "primary": "AAPL", "robinhood_symbol": "AAPL", "robinhood_status": "matched", "listings": [{"symbol": "AAPL", "market": "US", "role": "primary"}]},
+    {"name": "Broadcom", "primary": "AVGO", "robinhood_symbol": "AVGO", "robinhood_status": "matched", "listings": [{"symbol": "AVGO", "market": "US", "role": "primary"}]},
+    {"name": "Eos Energy", "primary": "EOSE", "robinhood_symbol": "EOSE", "robinhood_status": "matched", "listings": [{"symbol": "EOSE", "market": "US", "role": "primary"}]},
+    {
+      "name": "Infineon",
+      "primary": "IFX.DE",
+      "robinhood_symbol": "IFNNY",
+      "robinhood_status": "matched_us_adr",
+      "listings": [
+        {"symbol": "IFX.DE", "market": "Germany/XETRA", "role": "primary"},
+        {"symbol": "IFNNY", "market": "US OTC ADR", "role": "robinhood"}
+      ]
+    },
+    {"name": "Intel", "primary": "INTC", "robinhood_symbol": "INTC", "robinhood_status": "matched", "listings": [{"symbol": "INTC", "market": "US", "role": "primary"}]},
+    {"name": "Lumentum", "primary": "LITE", "robinhood_symbol": "LITE", "robinhood_status": "matched", "listings": [{"symbol": "LITE", "market": "US", "role": "primary"}]},
+    {"name": "Meta", "primary": "META", "robinhood_symbol": "META", "robinhood_status": "matched", "listings": [{"symbol": "META", "market": "US", "role": "primary"}]},
+    {"name": "Micron", "primary": "MU", "robinhood_symbol": "MU", "robinhood_status": "matched", "listings": [{"symbol": "MU", "market": "US", "role": "primary"}]},
+    {"name": "Microsoft", "primary": "MSFT", "robinhood_symbol": "MSFT", "robinhood_status": "matched", "listings": [{"symbol": "MSFT", "market": "US", "role": "primary"}]},
+    {"name": "Nvidia", "primary": "NVDA", "robinhood_symbol": "NVDA", "robinhood_status": "matched", "listings": [{"symbol": "NVDA", "market": "US", "role": "primary"}]},
+    {"name": "Oracle", "primary": "ORCL", "robinhood_symbol": "ORCL", "robinhood_status": "matched", "listings": [{"symbol": "ORCL", "market": "US", "role": "primary"}]},
+    {"name": "Palantir", "primary": "PLTR", "robinhood_symbol": "PLTR", "robinhood_status": "matched", "listings": [{"symbol": "PLTR", "market": "US", "role": "primary"}]},
+    {"name": "Rivian", "primary": "RIVN", "robinhood_symbol": "RIVN", "robinhood_status": "matched", "listings": [{"symbol": "RIVN", "market": "US", "role": "primary"}]},
+    {"name": "Rocket Lab", "primary": "RKLB", "robinhood_symbol": "RKLB", "robinhood_status": "matched", "listings": [{"symbol": "RKLB", "market": "US", "role": "primary"}]},
+    {"name": "Samsung Electronics", "primary": "005930.KS", "robinhood_symbol": null, "robinhood_status": "not_found", "listings": [{"symbol": "005930.KS", "market": "South Korea/KRX", "role": "primary"}]},
+    {"name": "SanDisk", "primary": "SNDK", "robinhood_symbol": "SNDK", "robinhood_status": "matched", "listings": [{"symbol": "SNDK", "market": "US", "role": "primary"}]},
+    {"name": "SK Hynix", "primary": "000660.KS", "robinhood_symbol": null, "robinhood_status": "not_found", "listings": [{"symbol": "000660.KS", "market": "South Korea/KRX", "role": "primary"}]},
+    {"name": "Tesla", "primary": "TSLA", "robinhood_symbol": "TSLA", "robinhood_status": "matched", "listings": [{"symbol": "TSLA", "market": "US", "role": "primary"}]},
+    {"name": "TSMC", "primary": "TSM", "robinhood_symbol": "TSM", "robinhood_status": "matched_us_adr", "listings": [{"symbol": "TSM", "market": "US ADR", "role": "primary"}]},
+    {"name": "Uber", "primary": "UBER", "robinhood_symbol": "UBER", "robinhood_status": "matched", "listings": [{"symbol": "UBER", "market": "US", "role": "primary"}]},
+    {
+      "name": "Xiaomi",
+      "primary": "1810.HK",
+      "robinhood_symbol": "XIACY",
+      "robinhood_status": "matched_us_otc_adr",
+      "listings": [
+        {"symbol": "1810.HK", "market": "Hong Kong/HKEX", "role": "primary"},
+        {"symbol": "XIACY", "market": "US OTC ADR", "role": "robinhood"}
+      ]
+    },
+    {
+      "name": "XPeng",
+      "primary": "XPEV",
+      "robinhood_symbol": "XPEV",
+      "robinhood_status": "matched_us_adr",
+      "listings": [
+        {"symbol": "XPEV", "market": "US ADR", "role": "primary"},
+        {"symbol": "9868.HK", "market": "Hong Kong/HKEX", "role": "alternate"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "thread_id": { "type": "string" },
+    "source_profile_id": { "type": "string" },
+    "readable_title": { "type": "string", "maxLength": 120 },
+    "resolved_summary": { "type": "string", "maxLength": 1800 },
+    "timeline_events": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": { "type": "string" },
+          "ticker": { "type": "string" },
+          "event_type": { "type": "string" },
+          "confidence": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "statement": { "type": "string", "maxLength": 500 },
+          "evidence": { "type": "string", "maxLength": 500 },
+          "context_used": { "type": "string", "maxLength": 500 }
+        },
+        "required": ["date", "ticker", "event_type", "confidence", "statement", "evidence", "context_used"]
+      }
+    },
+    "portfolio_clues": {
+      "type": "array",
+      "maxItems": 25,
+      "items": { "type": "string", "maxLength": 350 }
+    },
+    "resolved_tone": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "type": "string", "maxLength": 240 }
+    },
+    "remaining_uncertainties": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 260 }
+    },
+    "corrections_to_prior_draft": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 260 }
+    }
+  },
+  "required": [
+    "thread_id",
+    "source_profile_id",
+    "readable_title",
+    "resolved_summary",
+    "timeline_events",
+    "portfolio_clues",
+    "resolved_tone",
+    "remaining_uncertainties",
+    "corrections_to_prior_draft"
+  ]
+}

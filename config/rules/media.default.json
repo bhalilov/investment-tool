@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "ruleset_id": "media.default",
+  "download_types": [
+    "photo"
+  ],
+  "send_to_ai_types": [
+    "photo"
+  ],
+  "placeholder_types": [
+    "video",
+    "animated_gif"
+  ],
+  "ignore_types": [],
+  "recover_missing_photo_metadata": true,
+  "recover_video_preview": false,
+  "max_ai_image_bytes": 5000000,
+  "missing_media_policy": "record_placeholder",
+  "placeholder_tags": {
+    "video": "VIDEO_PRESENT",
+    "animated_gif": "ANIMATED_GIF_PRESENT"
+  }
+}

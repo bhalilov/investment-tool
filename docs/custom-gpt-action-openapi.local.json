@@ -1,0 +1,177 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AJ Investment Tool API",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8787"
+    }
+  ],
+  "paths": {
+    "/aj/search": {
+      "post": {
+        "operationId": "searchEvidence",
+        "summary": "Search AJ evidence across captured X thread evidence documents.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  },
+                  "tickers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "date_from": {
+                    "type": "string"
+                  },
+                  "date_to": {
+                    "type": "string"
+                  },
+                  "source_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "default": 10
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Relevant evidence results with source links."
+          }
+        }
+      }
+    },
+    "/aj/thread/{thread_id}": {
+      "get": {
+        "operationId": "getThread",
+        "summary": "Return one compiled thread with posts, media, and source URLs.",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Compiled thread evidence."
+          }
+        }
+      }
+    },
+    "/aj/ticker/{ticker}/memory": {
+      "get": {
+        "operationId": "getTickerMemory",
+        "summary": "Return living memory and recent evidence for a ticker.",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticker memory with sources."
+          }
+        }
+      }
+    },
+    "/aj/timeline": {
+      "post": {
+        "operationId": "getTimeline",
+        "summary": "Return a ticker timeline for a date range.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ticker": {
+                    "type": "string"
+                  },
+                  "date_from": {
+                    "type": "string"
+                  },
+                  "date_to": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ticker"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ticker timeline events."
+          }
+        }
+      }
+    },
+    "/aj/recent-signals": {
+      "post": {
+        "operationId": "getRecentSignals",
+        "summary": "Return recent AJ action signals by priority.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "priority": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "date_from": {
+                    "type": "string"
+                  },
+                  "owned_only": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recent signal list."
+          }
+        }
+      }
+    }
+  }
+}

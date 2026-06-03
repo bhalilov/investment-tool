@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "ruleset_id": "thread_reconstruction.default",
+  "include_root_posts_by_source": true,
+  "include_replies_by_source": true,
+  "include_parent_question_for_source_reply": true,
+  "include_random_user_replies": false,
+  "include_quotes_from_source_posts": true,
+  "include_quotes_from_parent_questions": true,
+  "include_explicit_linked_posts": true,
+  "parent_chain_depth": 20,
+  "quote_depth": 1,
+  "conversation_pages": 5,
+  "sort_order": "oldest_first",
+  "ignored_reasons": {
+    "off_topic_retweet": true,
+    "off_topic_reply_context": true,
+    "self_promo_retweet": true
+  },
+  "self_promo_patterns": [
+    "subscription",
+    "subscriber",
+    "subscribe",
+    "mustsubscribeto",
+    "hc channel",
+    "hardcore channel"
+  ],
+  "thread_type_labels": {
+    "source_started_thread": "SOURCE_THREAD",
+    "source_reply_context": "SOURCE_REPLY_CONTEXT",
+    "linked_context": "LINKED_CONTEXT"
+  }
+}

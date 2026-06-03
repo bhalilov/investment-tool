@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "pipelines": [
+    {
+      "pipeline_id": "media_description",
+      "model_profile": "media_description",
+      "prompt": "prompts/media_description.md",
+      "schema": "schemas/media_description.schema.json",
+      "max_output_tokens": 1800,
+      "writes": "media_analysis_json",
+      "sync_vector_after_write": false
+    },
+    {
+      "pipeline_id": "thread_pass1",
+      "model_profile": "premium_reasoning",
+      "system_prompt": "prompts/thread_pass1_system.md",
+      "user_prompt": "prompts/thread_pass1_user.md",
+      "schema": "schemas/thread_pass1.schema.json",
+      "max_output_tokens": 6000,
+      "use_vector_retrieval": true,
+      "write_evidence": true,
+      "sync_vector_after_write": true,
+      "forbidden_outputs": [
+        "final_priority",
+        "final_signal",
+        "final_actionability_score",
+        "final_portfolio_state"
+      ]
+    },
+    {
+      "pipeline_id": "thread_pass2",
+      "model_profile": "premium_reasoning",
+      "system_prompt": "prompts/thread_pass2_system.md",
+      "user_prompt": "prompts/thread_pass2_user.md",
+      "schema": "schemas/thread_pass2.schema.json",
+      "max_output_tokens": 9000,
+      "use_vector_retrieval": true,
+      "write_evidence": true,
+      "sync_vector_after_write": true
+    },
+    {
+      "pipeline_id": "manual_screenshot_reconstruction",
+      "model_profile": "premium_reasoning",
+      "system_prompt": "prompts/manual_screenshot_reconstruction.md",
+      "schema": "schemas/manual_screenshot_reconstruction.schema.json",
+      "max_output_tokens": 12000,
+      "write_evidence": true,
+      "sync_vector_after_write": false
+    }
+  ]
+}

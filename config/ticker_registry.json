@@ -1,0 +1,27 @@
+{
+  "symbols": {
+    "AAPL": ["apple"],
+    "AIXA": ["aixtron", "aixa"],
+    "AMD": ["amd"],
+    "AVGO": ["broadcom"],
+    "GOOG": ["alphabet", "google"],
+    "HOOD": [],
+    "INTC": ["intel"],
+    "LITE": ["lite", "lumentum"],
+    "META": ["meta", "facebook"],
+    "MSFT": ["microsoft"],
+    "MU": ["micron"],
+    "NVDA": ["nvidia"],
+    "ORCL": ["oracle"],
+    "PLTR": ["palantir"],
+    "QQQ": ["qqq", "nasdaq 100"],
+    "RIVN": ["rivian"],
+    "RKLB": ["rocket lab", "rocketlab"],
+    "SPY": ["spy", "s&p 500", "sp500"],
+    "TSLA": ["tesla"],
+    "TSM": ["tsm", "taiwan semiconductor", "tsmc"],
+    "UBER": ["uber"],
+    "XIACY": ["xiaomi", "1810", "1810.hk", "xiacf", "7064.tw"],
+    "XPEV": ["xpeng", "xpev"]
+  }
+}

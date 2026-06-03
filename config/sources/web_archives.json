@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "default_source_id": "article_archive_001",
+  "sources": [
+    {
+      "source_id": "article_archive_001",
+      "module": "hardcore_articles",
+      "source_type": "web_article_archive",
+      "display_name": "AJ Investment Research Hardcore/Ghost",
+      "storage": {
+        "archive_dir": "/Users/burhanhalilov/investment-tool-data/unsorted/AJ Investment Research PDFs",
+        "output_dir": "/Users/burhanhalilov/investment-tool-data/hardcore"
+      },
+      "html_cleanup_patterns": [
+        "Saved from AJ Investment Research on .*?https://\\S+"
+      ],
+      "analysis_notes": [
+        "This is supporting context for X-thread analysis, not a live-trading alert feed.",
+        "Do not OCR images. Use only extracted article text and image alt text.",
+        "Be skeptical and conservative; source language may be confident, vague, promotional, or stale.",
+        "Separate explicit actions from thesis language. Do not infer buy/sell action unless the article states it.",
+        "Flag stale context risk because these articles may be outdated relative to later X posts."
+      ]
+    }
+  ]
+}

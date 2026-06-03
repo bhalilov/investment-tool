@@ -1,0 +1,26 @@
+{
+  "updated_from": "robinhood_mcp",
+  "updated_at": "2026-06-01",
+  "owned_tickers": [
+    "AAPL",
+    "HOOD",
+    "LITE",
+    "META",
+    "TSLA",
+    "NVDA",
+    "MU",
+    "ORCL",
+    "RKLB"
+  ],
+  "combined_positions": {
+    "AAPL": 128.91731,
+    "HOOD": 5.535259,
+    "LITE": 200.0,
+    "META": 144.640937,
+    "MU": 200.0,
+    "NVDA": 4510.0,
+    "ORCL": 250.0,
+    "RKLB": 2000.0,
+    "TSLA": 8998.0
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "thread_id": { "type": "string" },
+    "source_profile_id": { "type": "string" },
+    "readable_title": { "type": "string", "maxLength": 120 },
+    "summary": { "type": "string", "maxLength": 1400 },
+    "source_claims": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "type": "string", "maxLength": 300 }
+    },
+    "answered_questions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 300 }
+    },
+    "candidate_timeline_events": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "date": { "type": "string" },
+          "ticker": { "type": "string" },
+          "event_type": { "type": "string" },
+          "statement": { "type": "string", "maxLength": 400 },
+          "evidence": { "type": "string", "maxLength": 400 },
+          "uncertainty": { "type": "string", "maxLength": 300 }
+        },
+        "required": ["date", "ticker", "event_type", "statement", "evidence", "uncertainty"]
+      }
+    },
+    "tickers": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 24 }
+    },
+    "media_observations": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 300 }
+    },
+    "tone_markers": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "type": "string", "maxLength": 180 }
+    },
+    "linked_context_needed": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 240 }
+    },
+    "ambiguities": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 240 }
+    },
+    "needs_second_pass": { "type": "boolean" },
+    "second_pass_reasons": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 240 }
+    }
+  },
+  "required": [
+    "thread_id",
+    "source_profile_id",
+    "readable_title",
+    "summary",
+    "source_claims",
+    "answered_questions",
+    "candidate_timeline_events",
+    "tickers",
+    "media_observations",
+    "tone_markers",
+    "linked_context_needed",
+    "ambiguities",
+    "needs_second_pass",
+    "second_pass_reasons"
+  ]
+}

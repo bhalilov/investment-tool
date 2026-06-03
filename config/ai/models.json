@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "provider": "openai",
+  "model_profiles": {
+    "premium_reasoning": {
+      "model": "gpt-5.5",
+      "intended_use": "expensive high-intelligence thread/media-context analysis"
+    },
+    "lower_cost_reasoning": {
+      "model": "gpt-5.4-mini",
+      "intended_use": "lower-cost second choice for less critical runs"
+    },
+    "media_description": {
+      "model": "gpt-5.5",
+      "intended_use": "neutral visual OCR/description for screenshots and charts"
+    },
+    "embedding": {
+      "model": "text-embedding-3-small",
+      "intended_use": "vector store embeddings/search"
+    }
+  }
+}

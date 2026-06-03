@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "media_key": { "type": "string" },
+    "visual_type": {
+      "type": "string",
+      "enum": [
+        "stock_chart",
+        "portfolio_screenshot",
+        "table_or_model",
+        "news_or_article",
+        "social_post",
+        "dashboard",
+        "other",
+        "unclear"
+      ]
+    },
+    "summary": { "type": "string", "maxLength": 700 },
+    "detected_tickers": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "type": "string", "maxLength": 24 }
+    },
+    "detected_companies": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "type": "string", "maxLength": 80 }
+    },
+    "visible_text": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 160 }
+    },
+    "key_numbers": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "type": "string", "maxLength": 80 }
+    },
+    "dates_or_timeframes": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "type": "string", "maxLength": 80 }
+    },
+    "chart_or_table_summary": { "type": "string", "maxLength": 700 },
+    "uncertainties": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "type": "string", "maxLength": 180 }
+    },
+    "confidence": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+    "needs_visual_recheck": { "type": "boolean" }
+  },
+  "required": [
+    "media_key",
+    "visual_type",
+    "summary",
+    "detected_tickers",
+    "detected_companies",
+    "visible_text",
+    "key_numbers",
+    "dates_or_timeframes",
+    "chart_or_table_summary",
+    "uncertainties",
+    "confidence",
+    "needs_visual_recheck"
+  ]
+}
