@@ -35,8 +35,9 @@ Work in /Users/burhanhalilov/code/investment-tool.
 Do not use Google Drive as the live code or data workspace.
 Runtime data is in /Users/burhanhalilov/investment-tool-data.
 The .env file is in the repo and contains private API credentials; do not print it.
-Main script: src/investment_tool/capture_threads.py.
-Run command: PYTHONPATH=src python3 -m investment_tool.capture_threads
+Top-level runner: src/investment_tool/pipeline_orchestrator.py.
+X capture compatibility wrapper: src/investment_tool/capture_threads.py.
+Run command: PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture
 Main index: /Users/burhanhalilov/investment-tool-data/x_threads/indexes/index.html.
 User prefers plain language, HTML reports, no YAML, and step-by-step explanations.
 ```
@@ -46,13 +47,13 @@ User prefers plain language, HTML reports, no YAML, and step-by-step explanation
 From `/Users/burhanhalilov/code/investment-tool`:
 
 ```bash
-PYTHONPATH=src python3 -m investment_tool.capture_threads
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture
 ```
 
 Cheap smoke test:
 
 ```bash
-PYTHONPATH=src python3 -m investment_tool.capture_threads --max-threads 1 --timeline-pages 1 --conversation-pages 1 --no-analyze
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture --max-threads 1 --timeline-pages 1 --conversation-pages 1
 ```
 
 ## Important Files
@@ -62,7 +63,12 @@ PYTHONPATH=src python3 -m investment_tool.capture_threads --max-threads 1 --time
 | `README.md` | Short project overview |
 | `docs/storage-layout.md` | Code/data storage map |
 | `docs/ai_storage_infographics.html` | Visual explanation of stored data |
-| `src/investment_tool/capture_threads.py` | Main X capture, render, and AI analysis script |
+| `src/investment_tool/pipeline_orchestrator.py` | Top-level stage and maintenance runner |
+| `src/investment_tool/capture_threads.py` | Compatibility wrapper for old X capture commands |
+| `src/investment_tool/x_capture_job.py` | Live X capture stage; no AI/vector/market work |
+| `src/investment_tool/x_thread_store.py` | X cached JSON/HTML lifecycle and repair helpers |
+| `src/investment_tool/x_raw_rebuild.py` | Rebuild X generated JSON from saved raw API |
+| `src/investment_tool/x_capture_metadata.py` | Non-AI title, preview, ticker, and pending metadata helpers |
 | `config/ticker_registry.json` | Ticker aliases and canonical ticker mapping |
 | `config/owned_positions.json` | Owned tickers for index highlighting |
 | `.env` | Private credentials |
@@ -74,5 +80,5 @@ PYTHONPATH=src python3 -m investment_tool.capture_threads --max-threads 1 --time
 - Do not print or commit `.env`.
 - Do not move live data into Google Drive.
 - Only copy final reports to Google Drive if explicitly requested.
-- AI analysis runs after a full X thread is compiled, not for every single reply.
+- X capture never runs AI. AI analysis runs in separate pipeline stages after a full thread/media context is compiled.
 - Routine X token refresh should be quiet unless it fails.

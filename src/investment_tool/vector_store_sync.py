@@ -3,7 +3,7 @@
 
 This script is intentionally separate from capture_threads.py:
 
-- capture_threads.py owns collecting and analyzing local thread records.
+- X capture owns collecting local thread records only.
 - this script owns converting those records into searchable evidence docs and
   attaching them to an OpenAI Platform vector store.
 """

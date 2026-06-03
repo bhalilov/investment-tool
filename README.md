@@ -26,12 +26,24 @@ V1 priorities:
 
 Private data, raw API responses, screenshots, reports, logs, database files, and secrets must stay out of Git.
 
-Live X capture analyzes new or changed threads with OpenAI by default after the thread is compiled. Use `--no-analyze` only for cheap/debug live runs. Cached HTML rebuilds still require `--analyze` when you want to backfill or refresh AI metadata.
+The top-level orchestrator is `investment_tool.pipeline_orchestrator`. It controls pipeline stages and maintenance modes. X capture itself is now only an X data/HTML/JSON stage; it never runs AI, vector sync, market prices, or HC parsing. AI passes are separate pipeline stages.
 
 Run from the code folder:
 
 ```bash
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-rerender
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-reindex
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-raw-rebuild --replace-generated-json
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-repair-media-paths
+PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-recover-media
+```
+
+The old X capture module remains as a compatibility wrapper:
+
+```bash
 PYTHONPATH=src python3 -m investment_tool.capture_threads
+PYTHONPATH=src python3 -m investment_tool.capture_threads --rerender-only
 ```
 
 Other product jobs can be run the same way:
@@ -43,9 +55,6 @@ PYTHONPATH=src python3 -m investment_tool.media_analysis --dry-run --limit 10
 PYTHONPATH=src python3 -m investment_tool.manual_threads --bundle-name may31-screenshots --dry-run /path/to/screenshot.jpeg
 PYTHONPATH=src python3 -m investment_tool.vector_store_sync --generate-only
 PYTHONPATH=src python3 -m investment_tool.action_server
-PYTHONPATH=src python3 -m investment_tool.capture_threads --repair-media-paths
-PYTHONPATH=src python3 -m investment_tool.capture_threads --rebuild-from-raw-api --rebuild-staging-dir /Users/burhanhalilov/investment-tool-data/x_threads/rebuild_staging/latest
-PYTHONPATH=src python3 -m investment_tool.capture_threads --recover-missing-media-metadata
 ```
 
 Manual X screenshots are imported as their own source bundles before AI analysis. Use `--analyze` only when you want GPT-5.5 to logically group overlapping screenshots, stitch scroll captures, reconstruct one or more visible X threads, and describe screenshots embedded inside the visible posts.

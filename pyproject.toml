@@ -5,6 +5,7 @@ requires-python = ">=3.10"
 description = "Local configurable investment research capture and analysis tool"
 
 [project.scripts]
+investment-tool = "investment_tool.pipeline_orchestrator:main"
 investment-tool-x-capture = "investment_tool.capture_threads:main"
 investment-tool-hardcore-capture = "investment_tool.hardcore_capture:main"
 investment-tool-market-prices = "investment_tool.market_prices:main"
