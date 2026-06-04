@@ -22,8 +22,8 @@ investment-tool workflow update
 investment-tool workflow sync
 investment-tool workflow refresh
 
-investment-tool workflow rebuild --stage market-prices
-investment-tool workflow rebuild --stage x-from-raw --stage render-indexes
+investment-tool workflow rebuild --stage prices
+investment-tool workflow rebuild --stage x-raw --stage render
 investment-tool workflow rebuild --all
 
 investment-tool workflow check
@@ -86,11 +86,11 @@ scan -> plan -> run -> log
 Examples:
 
 - `x-capture`
-- `market-prices`
-- `media-description`
-- `manual-import`
-- `hc-ingest`
-- `render-indexes`
+- `prices`
+- `descriptions`
+- `screenshots`
+- `articles`
+- `render`
 
 ### Cycle Stage
 
@@ -118,7 +118,7 @@ Examples:
 
 - `check`
 - `doctor`
-- `x-from-raw`
+- `x-raw`
 - media path repair
 - missing media recovery
 
@@ -186,10 +186,10 @@ V1 scheduled update stage order:
 
 ```text
 1. x-capture
-2. manual-import
-3. market-prices
-4. media-description
-5. render-indexes
+2. screenshots
+3. prices
+4. descriptions
+5. render
 ```
 
 Failure policy:
@@ -219,7 +219,7 @@ Does not:
 - parse HC;
 - render HTML/indexes after the render split.
 
-### manual-import
+### screenshots
 
 Uses a manual screenshot inbox in the runtime data folder. The inbox may be flat.
 
@@ -227,7 +227,7 @@ File timestamps are weak hints only. Manual screenshots are often iPad/X
 screenshots with visible clocks and overlapping scroll regions. V1 scheduled
 manual import should use AI for grouping, stitching, and reconstruction.
 
-### market-prices
+### prices
 
 Extends current daily-only behavior.
 
@@ -244,25 +244,25 @@ Incremental update:
 - do not derive daily/hourly bars from 15-minute bars;
 - keep USD-normalized prices while preserving original currency and FX data.
 
-### media-description
+### descriptions
 
 Runs image description/OCR preparation for new or changed downloaded photos.
 
 This stage may call OpenAI in `workflow update`, but it is not the thread Phase
 1 reasoning pass. Videos and animated GIFs remain placeholders only.
 
-### render-indexes
+### render
 
 Generates thread HTML and index pages from clean JSON. Rendering is split from
 capture so source capture and presentation are not mixed.
 
-### hc-ingest
+### articles
 
-HC/Ghost article ingest is not part of scheduled `workflow update` v1. It is an
+Saved article ingest is not part of scheduled `workflow update` v1. It is an
 explicit rebuild/manual stage:
 
 ```bash
-investment-tool workflow rebuild --stage hc-ingest
+investment-tool workflow rebuild --stage articles
 ```
 
 ## Workflow Rebuild V1
@@ -271,12 +271,12 @@ investment-tool workflow rebuild --stage hc-ingest
 
 Valid v1 stages:
 
-- `x-from-raw`
-- `market-prices`
-- `media-description`
-- `manual-import`
-- `hc-ingest`
-- `render-indexes`
+- `x-raw`
+- `prices`
+- `descriptions`
+- `screenshots`
+- `articles`
+- `render`
 
 The command requires one or more `--stage` values, or explicit `--all`.
 
@@ -308,4 +308,3 @@ Do not implement these as part of the non-AI workflow orchestrator slice:
 - time-sensitive vector timeline memory implementation.
 
 Those decisions live in `docs/ai-vector-pass-design.md`.
-

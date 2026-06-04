@@ -18,6 +18,7 @@ Read these before changing workflow or AI/vector behavior:
 
 - `docs/pipeline-orchestrator-plan.md` - approved non-AI workflow/orchestrator design.
 - `docs/ai-vector-pass-design.md` - postponed thread AI/vector design decisions.
+- `docs/code-organization-spec.md` - locked package hierarchy and naming.
 - `docs/storage-layout.md` - code/data storage map.
 
 ## Architecture Rules
@@ -42,7 +43,7 @@ investment-tool workflow update
 investment-tool workflow sync
 investment-tool workflow refresh
 
-investment-tool workflow rebuild --stage market-prices
+investment-tool workflow rebuild --stage prices
 investment-tool workflow rebuild --all
 
 investment-tool workflow check
