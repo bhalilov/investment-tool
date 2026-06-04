@@ -1,5 +1,17 @@
 # Custom GPT Actions Backend Spec
 
+> **SUPERSEDED REFERENCE**
+>
+> Superseded by `docs/ai-vector-pass-design.md`; do not use for implementation
+> decisions.
+>
+> This document is older reference material. Do not use it for implementation
+> decisions about workflow orchestration, Phase 1 AI, or vector memory.
+> Current decisions live in:
+>
+> - `docs/pipeline-orchestrator-plan.md`
+> - `docs/ai-vector-pass-design.md`
+
 ## Goal
 
 Build the backend that lets a Custom GPT answer questions about AJ Investment Research content using captured X threads, Ghost articles, screenshots/OCR, and living ticker memory.

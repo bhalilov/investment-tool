@@ -1,71 +1,76 @@
 # investment-tool
 
-Local monitoring and evidence-capture tool for configurable investment research sources.
+Local monitoring and evidence-capture tool for configurable investment research
+sources.
 
-Current local layout:
+## Current Layout
 
 - Code: `/Users/burhanhalilov/code/investment-tool`
-- Data: `/Users/burhanhalilov/investment-tool-data`
+- Runtime data: `/Users/burhanhalilov/investment-tool-data`
 - Main X index: `/Users/burhanhalilov/investment-tool-data/x_threads/indexes/index.html`
 
-Architecture rule:
+Private data, raw API responses, screenshots, reports, logs, runtime data, and
+secrets must stay out of Git.
+
+## Source-Of-Truth Specs
+
+Read these before changing workflow or AI/vector behavior:
+
+- `docs/pipeline-orchestrator-plan.md` - approved non-AI workflow/orchestrator design.
+- `docs/ai-vector-pass-design.md` - postponed thread AI/vector design decisions.
+- `docs/storage-layout.md` - code/data storage map.
+- `docs/start-new-codex-chat.md` - handoff notes for a fresh Codex chat.
+
+Older Custom GPT/vector docs are reference material only when marked as
+superseded by the new AI/vector design.
+
+## Architecture Rules
 
 - Product logic lives in `src/investment_tool/`.
 - `scripts/` is only for thin compatibility launchers or disposable probes.
-- Backfill, manual runs, scheduled runs, and production should use the same package logic with different flags.
-- When a prototype becomes useful, move the logic into `src/investment_tool/` before relying on it.
-- Source accounts, source-specific interpretation notes, reconstruction rules, media rules, model choices, and prompts live under `config/` and `prompts/`, not as account constants in code.
+- Scheduled runs, manual runs, rebuilds, and production should use the same
+  package logic with different flags.
+- When a prototype becomes useful, move the logic into `src/investment_tool/`
+  before relying on it.
+- Source accounts, source-specific interpretation notes, reconstruction rules,
+  media rules, model choices, and prompts live under `config/` and `prompts/`.
 
-V1 priorities:
+## Approved Workflow Interface
 
-- Capture X posts, threads, media, screenshots, and OCR output reliably.
-- Store all raw API responses locally.
-- Use OpenAI analysis only after relevant thread context is compiled.
-- Send alerts through local fallback, email, and Pushover when configured.
-- Generate local HTML reports.
-
-Private data, raw API responses, screenshots, reports, logs, database files, and secrets must stay out of Git.
-
-The top-level orchestrator is `investment_tool.pipeline_orchestrator`. It controls pipeline stages and maintenance modes. X capture itself is now only an X data/HTML/JSON stage; it never runs AI, vector sync, market prices, or HC parsing. AI passes are separate pipeline stages.
-
-Run from the code folder:
+The planned public interface is:
 
 ```bash
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-rerender
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-reindex
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-raw-rebuild --replace-generated-json
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-repair-media-paths
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-recover-media
+investment-tool workflow update
+investment-tool workflow sync
+investment-tool workflow refresh
+
+investment-tool workflow rebuild --stage market-prices
+investment-tool workflow rebuild --all
+
+investment-tool workflow check
+investment-tool workflow doctor
 ```
 
-The old X capture module remains as a compatibility wrapper:
+`update`, `sync`, and `refresh` are aliases for the normal incremental workflow.
+`check` and `doctor` are read-only inspection aliases in v1. `rebuild` requires
+one or more `--stage` values or explicit `--all`.
 
-```bash
-PYTHONPATH=src python3 -m investment_tool.capture_threads
-PYTHONPATH=src python3 -m investment_tool.capture_threads --rerender-only
-```
+The current code still has transitional direct commands while the workflow
+orchestrator is being implemented.
 
-Other product jobs can be run the same way:
+## Important Boundaries
 
-```bash
-PYTHONPATH=src python3 -m investment_tool.market_prices --from 2026-03-01
-PYTHONPATH=src python3 -m investment_tool.hardcore_capture --no-analyze
-PYTHONPATH=src python3 -m investment_tool.media_analysis --dry-run --limit 10
-PYTHONPATH=src python3 -m investment_tool.manual_threads --bundle-name may31-screenshots --dry-run /path/to/screenshot.jpeg
-PYTHONPATH=src python3 -m investment_tool.vector_store_sync --generate-only
-PYTHONPATH=src python3 -m investment_tool.action_server
-```
+- X capture never runs thread AI.
+- Phase 1 thread AI intentionally has no vector search.
+- Vector push/search behavior is postponed until the AI/vector design is
+  reviewed again.
+- Rendering/indexing should be split from capture in the new workflow.
+- HC/Ghost ingest is explicit/manual in workflow v1, not part of scheduled
+  update.
 
-Manual X screenshots are imported as their own source bundles before AI analysis. Use `--analyze` only when you want GPT-5.5 to logically group overlapping screenshots, stitch scroll captures, reconstruct one or more visible X threads, and describe screenshots embedded inside the visible posts.
-
-Before pushing code changes:
+## Verification Before Pushing
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 python3 -m py_compile src/investment_tool/*.py scripts/*.py tests/*.py
 ```
-
-Storage details are documented in `docs/storage-layout.md`.
-
-For a fresh Codex Desktop chat, use `docs/start-new-codex-chat.md`.

@@ -1,5 +1,17 @@
 # Custom GPT Builder Instructions
 
+> **SUPERSEDED REFERENCE**
+>
+> Superseded by `docs/ai-vector-pass-design.md`; do not use for implementation
+> decisions.
+>
+> This document is older reference material for a future Custom GPT. Do not use
+> it for implementation decisions about workflow orchestration, Phase 1 AI, or
+> vector memory. Current decisions live in:
+>
+> - `docs/pipeline-orchestrator-plan.md`
+> - `docs/ai-vector-pass-design.md`
+
 ## Goal
 
 Create a Custom GPT that answers questions about AJ Investment Research content by calling this tool's backend through Actions.

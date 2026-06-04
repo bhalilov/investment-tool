@@ -12,7 +12,7 @@ Open the new chat with this exact working directory:
 
 Do not use the data folder as the workspace.
 
-## Data Folder
+## Runtime Data Folder
 
 Runtime data is stored outside the code repo:
 
@@ -35,37 +35,39 @@ Work in /Users/burhanhalilov/code/investment-tool.
 Do not use Google Drive as the live code or data workspace.
 Runtime data is in /Users/burhanhalilov/investment-tool-data.
 The .env file is in the repo and contains private API credentials; do not print it.
-Top-level runner: src/investment_tool/pipeline_orchestrator.py.
-X capture compatibility wrapper: src/investment_tool/capture_threads.py.
-Run command: PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture
-Main index: /Users/burhanhalilov/investment-tool-data/x_threads/indexes/index.html.
-User prefers plain language, HTML reports, no YAML, and step-by-step explanations.
+
+Before changing workflow or AI/vector behavior, read:
+- docs/pipeline-orchestrator-plan.md
+- docs/ai-vector-pass-design.md
+- docs/storage-layout.md
+
+The approved public workflow interface is being moved to:
+- investment-tool workflow update|sync|refresh
+- investment-tool workflow rebuild --stage <stage>
+- investment-tool workflow check|doctor
+
+The current direct X capture commands are transitional implementation details, not the final workflow design.
+X capture never runs thread AI.
+Phase 1 thread AI has no vector search.
+Vector push/search design is postponed.
 ```
 
-## Normal Run
-
-From `/Users/burhanhalilov/code/investment-tool`:
-
-```bash
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture
-```
-
-Cheap smoke test:
-
-```bash
-PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture --max-threads 1 --timeline-pages 1 --conversation-pages 1
-```
-
-## Important Files
+## Source-Of-Truth Docs
 
 | File | Purpose |
 | --- | --- |
-| `README.md` | Short project overview |
+| `docs/pipeline-orchestrator-plan.md` | Current non-AI workflow/orchestrator spec |
+| `docs/ai-vector-pass-design.md` | Current postponed AI/vector design |
 | `docs/storage-layout.md` | Code/data storage map |
-| `docs/ai_storage_infographics.html` | Visual explanation of stored data |
-| `src/investment_tool/pipeline_orchestrator.py` | Top-level stage and maintenance runner |
+| `README.md` | Short project overview |
+
+## Current Important Code
+
+| File | Purpose |
+| --- | --- |
+| `src/investment_tool/pipeline_orchestrator.py` | Transitional top-level runner; workflow command group is planned here |
 | `src/investment_tool/capture_threads.py` | Compatibility wrapper for old X capture commands |
-| `src/investment_tool/x_capture_job.py` | Live X capture stage; no AI/vector/market work |
+| `src/investment_tool/x_capture_job.py` | Live X capture stage; no thread AI/vector/market/HC work |
 | `src/investment_tool/x_thread_store.py` | X cached JSON/HTML lifecycle and repair helpers |
 | `src/investment_tool/x_raw_rebuild.py` | Rebuild X generated JSON from saved raw API |
 | `src/investment_tool/x_capture_metadata.py` | Non-AI title, preview, ticker, and pending metadata helpers |
@@ -80,5 +82,4 @@ PYTHONPATH=src python3 -m investment_tool.pipeline_orchestrator x-capture --max-
 - Do not print or commit `.env`.
 - Do not move live data into Google Drive.
 - Only copy final reports to Google Drive if explicitly requested.
-- X capture never runs AI. AI analysis runs in separate pipeline stages after a full thread/media context is compiled.
-- Routine X token refresh should be quiet unless it fails.
+- Read the two spec docs before implementing workflow or AI/vector changes.
