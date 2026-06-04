@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Compatibility launcher for investment_tool.media_analysis."""
+"""Compatibility launcher for investment_tool.context.descriptions."""
 
-from investment_tool.media_analysis import main
+from investment_tool.context.descriptions import main
 
 
 if __name__ == "__main__":

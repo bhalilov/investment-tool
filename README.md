@@ -36,7 +36,7 @@ Read these before changing workflow or AI/vector behavior:
 
 ## Approved Workflow Interface
 
-The planned public interface is:
+The public workflow interface is:
 
 ```bash
 investment-tool workflow update
@@ -54,8 +54,8 @@ investment-tool workflow doctor
 `check` and `doctor` are read-only inspection aliases in v1. `rebuild` requires
 one or more `--stage` values or explicit `--all`.
 
-The current code still has transitional direct commands while the workflow
-orchestrator is being implemented.
+Direct stage commands still exist as compatibility launchers, but new
+production work should start from the `workflow` command group.
 
 ## Important Boundaries
 

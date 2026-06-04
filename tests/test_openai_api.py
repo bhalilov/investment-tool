@@ -1,6 +1,6 @@
 import unittest
 
-from investment_tool.openai_api import extract_response_text
+from investment_tool.analysis.openai import extract_response_text
 
 
 class OpenAIApiTests(unittest.TestCase):

@@ -1,0 +1,1 @@
+"""Canonical record shapes."""

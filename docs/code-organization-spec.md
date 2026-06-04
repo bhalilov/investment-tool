@@ -72,3 +72,10 @@ This is the locked package and naming plan for the refactor.
 
 Move code first and preserve behavior first. Keep compatibility wrappers for old
 module paths and old commands during the transition.
+
+## Adapter Note
+
+`sources/x/jobs.py` is the intentional adapter between the coordinate-only
+workflow runner and the X-specific stage commands. It owns legacy X CLI modes
+such as rerender, raw rebuild, media-path repair, and missing-media recovery so
+`workflow/run.py` does not contain X implementation details.

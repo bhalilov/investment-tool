@@ -2,10 +2,10 @@
   "version": 1,
   "modules": [
     {
-      "module_id": "x_capture",
+      "module_id": "x-capture",
       "platform": "x",
       "kind": "social_capture",
-      "entrypoint": "investment_tool.capture_threads",
+      "entrypoint": "investment_tool.sources.x.capture",
       "source_config": "config/sources/x_accounts.json",
       "supports": [
         "live_capture",
@@ -16,10 +16,10 @@
       ]
     },
     {
-      "module_id": "hardcore_articles",
+      "module_id": "articles",
       "platform": "web_archive",
       "kind": "article_archive",
-      "entrypoint": "investment_tool.hardcore_capture",
+      "entrypoint": "investment_tool.sources.articles.ingest",
       "source_config": "config/sources/web_archives.json",
       "supports": [
         "manual_archive_ingest",
@@ -27,20 +27,20 @@
       ]
     },
     {
-      "module_id": "manual_screenshot_threads",
+      "module_id": "screenshots",
       "platform": "manual_screenshots",
       "kind": "manual_capture",
-      "entrypoint": "investment_tool.manual_threads",
+      "entrypoint": "investment_tool.sources.screenshots.bundles",
       "supports": [
         "screenshot_bundle_import",
         "overlap_stitching_ai_reconstruction"
       ]
     },
     {
-      "module_id": "market_prices",
+      "module_id": "prices",
       "platform": "market_data",
       "kind": "context_data",
-      "entrypoint": "investment_tool.market_prices",
+      "entrypoint": "investment_tool.context.prices",
       "supports": [
         "daily_ohlcv",
         "usd_conversion"

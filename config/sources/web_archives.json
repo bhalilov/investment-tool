@@ -4,7 +4,7 @@
   "sources": [
     {
       "source_id": "article_archive_001",
-      "module": "hardcore_articles",
+      "module": "articles",
       "source_type": "web_article_archive",
       "display_name": "AJ Investment Research Hardcore/Ghost",
       "storage": {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Compatibility launcher for investment_tool.hardcore_capture."""
+"""Compatibility launcher for investment_tool.sources.articles.ingest."""
 
-from investment_tool.hardcore_capture import main
+from investment_tool.sources.articles.ingest import main
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
     {
       "source_id": "x_research_account_001",
       "platform": "x",
-      "module": "x_capture",
+      "module": "x-capture",
       "enabled": true,
       "account": {
         "username": "alojohhardcore",

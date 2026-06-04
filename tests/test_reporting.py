@@ -1,6 +1,6 @@
 import unittest
 
-from investment_tool.reporting import format_report_line
+from investment_tool.runtime.reporting import format_report_line
 
 
 class ReportingTests(unittest.TestCase):

@@ -20,8 +20,8 @@ SRC_DIR = ROOT_DIR / "src"
 if SRC_DIR.exists() and str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from investment_tool.runtime import load_env
-from investment_tool.source_config import SourceProfile, load_x_source_profile
+from investment_tool.runtime.env import load_env
+from investment_tool.runtime.config import SourceProfile, load_x_source_profile
 
 
 API_BASE = "https://api.x.com/2"

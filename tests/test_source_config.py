@@ -1,6 +1,6 @@
 import unittest
 
-from investment_tool.source_config import (
+from investment_tool.runtime.config import (
     load_model_registry,
     load_pipeline_registry,
     load_prompt,
@@ -18,7 +18,7 @@ class SourceConfigTests(unittest.TestCase):
         profile = load_x_source_profile()
 
         self.assertEqual(profile.platform, "x")
-        self.assertEqual(profile.module, "x_capture")
+        self.assertEqual(profile.module, "x-capture")
         self.assertTrue(profile.username)
         self.assertTrue(profile.user_id)
         self.assertIn("@", source_label(profile))
@@ -34,9 +34,9 @@ class SourceConfigTests(unittest.TestCase):
     def test_source_modules_are_discoverable(self):
         modules = load_source_modules()
 
-        self.assertIn("x_capture", modules)
-        self.assertIn("market_prices", modules)
-        self.assertIn("raw_api_rebuild", modules["x_capture"].supports)
+        self.assertIn("x-capture", modules)
+        self.assertIn("prices", modules)
+        self.assertIn("raw_api_rebuild", modules["x-capture"].supports)
 
     def test_configured_pipeline_prompts_and_schemas_exist(self):
         registry = load_pipeline_registry()
