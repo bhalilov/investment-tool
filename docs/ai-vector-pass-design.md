@@ -4,8 +4,7 @@ This document records the current AI/vector design decisions. It is separate
 from the non-AI workflow plan because thread analysis and vector memory are
 expensive and still need more review before implementation.
 
-This document supersedes older Custom GPT/vector notes for implementation
-decisions.
+This document supersedes older vector notes for implementation decisions.
 
 ## Current Decision
 
@@ -166,4 +165,3 @@ Do not implement these until reviewed:
 - whether static market context belongs in vector or only direct structured
   lookup;
 - how human corrections trigger stale Phase 2/vector state.
-

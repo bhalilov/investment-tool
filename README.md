@@ -21,9 +21,6 @@ Read these before changing workflow or AI/vector behavior:
 - `docs/storage-layout.md` - code/data storage map.
 - `docs/start-new-codex-chat.md` - handoff notes for a fresh Codex chat.
 
-Older Custom GPT/vector docs are reference material only when marked as
-superseded by the new AI/vector design.
-
 ## Architecture Rules
 
 - Product logic lives in `src/investment_tool/`.
