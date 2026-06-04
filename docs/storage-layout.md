@@ -5,6 +5,9 @@ The project is split into two clean places:
 - Code lives in `/Users/burhanhalilov/code/investment-tool`
 - Runtime data lives in `/Users/burhanhalilov/investment-tool-data`
 
+Use the code repo as the workspace. Do not use the runtime data folder as the
+workspace for code changes.
+
 Google Drive stays out of the live workflow. If reports need to be shared later,
 copy only finished report files there.
 
@@ -49,8 +52,8 @@ flowchart LR
 | `/Users/burhanhalilov/code/investment-tool/config` | Non-secret source/rule/ticker config | Yes |
 | `/Users/burhanhalilov/code/investment-tool/prompts` | AI prompt files | Yes |
 | `/Users/burhanhalilov/code/investment-tool/schemas` | AI output schemas | Yes |
-| `/Users/burhanhalilov/code/investment-tool/docs` | Current specs and handoff docs | Yes |
-| `/Users/burhanhalilov/code/investment-tool/.env` | X, OpenAI, email, and other credentials | No |
+| `/Users/burhanhalilov/code/investment-tool/docs` | Current specs and layout docs | Yes |
+| `/Users/burhanhalilov/code/investment-tool/.env` | X, OpenAI, email, and other credentials; never print or commit | No |
 
 ## Runtime Data
 

@@ -19,10 +19,10 @@ Read these before changing workflow or AI/vector behavior:
 - `docs/pipeline-orchestrator-plan.md` - approved non-AI workflow/orchestrator design.
 - `docs/ai-vector-pass-design.md` - postponed thread AI/vector design decisions.
 - `docs/storage-layout.md` - code/data storage map.
-- `docs/start-new-codex-chat.md` - handoff notes for a fresh Codex chat.
 
 ## Architecture Rules
 
+- Work from the code repo, not the runtime data folder.
 - Product logic lives in `src/investment_tool/`.
 - `scripts/` is only for thin compatibility launchers or disposable probes.
 - Scheduled runs, manual runs, rebuilds, and production should use the same
@@ -31,6 +31,7 @@ Read these before changing workflow or AI/vector behavior:
   before relying on it.
 - Source accounts, source-specific interpretation notes, reconstruction rules,
   media rules, model choices, and prompts live under `config/` and `prompts/`.
+- Never print or commit private credentials from `.env`.
 
 ## Approved Workflow Interface
 
