@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,16 @@ EXPANSIONS = ",".join(
 )
 MEDIA_FIELDS = "media_key,type,url,preview_image_url,width,height,alt_text,variants"
 USER_FIELDS = "id,username,name,verified,verified_type,protected"
+
+
+@dataclass(frozen=True)
+class ConversationSearchResult:
+    result_count: int
+    pages_requested: int
+    pages_fetched: int
+    has_more: bool
+    missing_reference_ids: tuple[str, ...] = ()
+    error_count: int = 0
 
 
 def safe_slug(value: str, fallback: str = "thread") -> str:
@@ -305,21 +316,39 @@ def search_conversation(
     users: dict[str, dict],
     media: dict[str, dict],
     pages: int,
-) -> int:
+) -> ConversationSearchResult:
     count = 0
     next_token: str | None = None
+    pages_fetched = 0
+    missing_reference_ids: set[str] = set()
+    error_count = 0
     for page in range(pages):
         params = tweet_params(query=f"conversation_id:{conversation_id}", max_results=100)
         if next_token:
             params["next_token"] = next_token
         response = client.get("/tweets/search/recent", params, f"conversation_{conversation_id}_page_{page + 1}")
+        pages_fetched += 1
         count += len(response.get("data") or [])
+        errors = response.get("errors") or []
+        error_count += len(errors)
+        for error in errors:
+            detail = str(error.get("detail") or "")
+            missing_id = str(error.get("resource_id") or error.get("value") or "")
+            if missing_id and "referenced_tweets.id" in detail:
+                missing_reference_ids.add(missing_id)
         merge_response(response, tweets, users, media)
         next_token = (response.get("meta") or {}).get("next_token")
         if not next_token:
             break
         time.sleep(0.2)
-    return count
+    return ConversationSearchResult(
+        result_count=count,
+        pages_requested=pages,
+        pages_fetched=pages_fetched,
+        has_more=bool(next_token),
+        missing_reference_ids=tuple(sorted(missing_reference_ids)),
+        error_count=error_count,
+    )
 
 
 def download_photos(media: dict[str, dict], media_dir: Path, wanted_keys: set[str]) -> dict[str, str]:

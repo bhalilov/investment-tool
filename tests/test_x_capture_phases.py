@@ -1,6 +1,17 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from investment_tool.feeds.x.capture import XCaptureOptions, assemble_conversations, discover_conversation_ids, has_new_tweets
+from investment_tool.feeds.x.api import ConversationSearchResult
+from investment_tool.feeds.x.capture import (
+    XCaptureOptions,
+    assemble_conversations,
+    cached_conversation_needs_search,
+    discover_conversation_ids,
+    has_new_tweets,
+    source_completeness_payload,
+)
 from investment_tool.feeds.x.context import XCaptureContext
 from investment_tool.runtime.config import FeedProfile
 
@@ -79,6 +90,95 @@ class XCapturePhaseTests(unittest.TestCase):
         ids = {tweet["id"] for tweet in conversations["root"]}
 
         self.assertEqual(ids, {"root", "reply", "quoted"})
+
+    def test_source_completeness_marks_missing_root_and_references(self):
+        items = [
+            {
+                "id": "reply",
+                "conversation_id": "root",
+                "referenced_tweets": [{"type": "replied_to", "id": "root"}, {"type": "quoted", "id": "missing-quote"}],
+            }
+        ]
+        search_result = ConversationSearchResult(
+            result_count=30,
+            pages_requested=1,
+            pages_fetched=1,
+            has_more=False,
+            missing_reference_ids=("root",),
+            error_count=1,
+        )
+
+        payload = source_completeness_payload("root", None, items, {"reply": items[0]}, search_result)
+
+        self.assertEqual(payload["status"], "api_partial_missing_references")
+        self.assertTrue(payload["missing_root_tweet"])
+        self.assertEqual(payload["missing_reference_ids"], ["missing-quote", "root"])
+        self.assertEqual(payload["conversation_search"]["result_count"], 30)
+
+    def test_source_completeness_marks_page_limited_search(self):
+        root = {"id": "root", "conversation_id": "root"}
+        search_result = ConversationSearchResult(
+            result_count=100,
+            pages_requested=1,
+            pages_fetched=1,
+            has_more=True,
+        )
+
+        payload = source_completeness_payload("root", root, [root], {"root": root}, search_result)
+
+        self.assertEqual(payload["status"], "conversation_search_limited")
+        self.assertFalse(payload["missing_root_tweet"])
+
+    def test_source_completeness_marks_exhausted_complete_search(self):
+        root = {"id": "root", "conversation_id": "root"}
+        search_result = ConversationSearchResult(
+            result_count=12,
+            pages_requested=5,
+            pages_fetched=1,
+            has_more=False,
+        )
+
+        payload = source_completeness_payload("root", root, [root], {"root": root}, search_result)
+
+        self.assertEqual(payload["status"], "conversation_search_exhausted")
+
+    def test_cached_page_limited_conversation_is_not_silently_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            records = Path(tmp)
+            (records / "thread__root.json").write_text(
+                json.dumps(
+                    {
+                        "conversation_id": "root",
+                        "source_completeness": {
+                            "conversation_search": {
+                                "has_more": True,
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertTrue(cached_conversation_needs_search(records, "root"))
+
+    def test_cached_exhausted_conversation_can_be_skipped_when_no_new_tweets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            records = Path(tmp)
+            (records / "thread__root.json").write_text(
+                json.dumps(
+                    {
+                        "conversation_id": "root",
+                        "source_completeness": {
+                            "conversation_search": {
+                                "has_more": False,
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertFalse(cached_conversation_needs_search(records, "root"))
 
 
 if __name__ == "__main__":

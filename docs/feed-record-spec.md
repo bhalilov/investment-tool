@@ -30,6 +30,7 @@ Feed capture fields:
 - `non_photo_media`
 - `rate_limits`
 - `completeness_status`
+- `source_completeness`
 - `analysis_stage`
 
 Rules:
@@ -39,6 +40,12 @@ Rules:
 - X records may include `preview_text` before thread AI runs.
 - X records must not contain final AI fields unless `analysis` is present and
   `analysis_stage` is no longer pending.
+- `completeness_status` is source completeness only, not AI confidence. Current
+  values include `conversation_search_exhausted`,
+  `conversation_search_limited`, `api_partial_missing_references`, and
+  `not_searched_cached`.
+- `source_completeness` should explain the status with root presence,
+  missing reference ids, and conversation-search page counts when available.
 - Ignored X records move to runtime `feeds/x/ignored` and include
   `ignored`, `ignored_reason`, and `ignored_at`.
 

@@ -38,6 +38,7 @@ from investment_tool.feeds.x.metadata import (
     title_with_label_prefix,
 )
 from investment_tool.feeds.x.api import (
+    ConversationSearchResult,
     XClient,
     download_photos,
     fetch_timeline,
@@ -342,13 +343,23 @@ def has_new_tweets(conv_id: str, tweets: dict[str, dict], cached_tweet_ids: dict
     return bool(current - known)
 
 
+def cached_conversation_needs_search(json_dir: Path, conversation_id: str) -> bool:
+    cached_record = find_cached_thread_record(json_dir, conversation_id)
+    if not cached_record:
+        return True
+    source_completeness = cached_record[1].get("source_completeness") or {}
+    conversation_search = source_completeness.get("conversation_search") or {}
+    return conversation_search.get("has_more") is True
+
+
 def search_selected_conversations(
+    paths: XCapturePaths,
     state: XCaptureState,
     conversation_ids: list[str],
     options: XCaptureOptions,
     reporter: JobReporter | None,
-) -> dict[str, int]:
-    search_counts: dict[str, int] = {}
+) -> dict[str, ConversationSearchResult]:
+    search_results: dict[str, ConversationSearchResult] = {}
     conversation_search_run = 0
     conversation_search_skipped = 0
     for conversation_id in conversation_ids:
@@ -356,13 +367,13 @@ def search_selected_conversations(
             not options.force
             and conversation_id in state.cached_conversation_ids
             and not has_new_tweets(conversation_id, state.tweets, state.cached_tweet_ids)
+            and not cached_conversation_needs_search(paths.json_dir, conversation_id)
         ):
-            search_counts[conversation_id] = 0
             conversation_search_skipped += 1
             continue
         conversation_search_run += 1
         emit_checkpoint(reporter, "X_CONVERSATION_SEARCH_START", conversation_id=conversation_id, pages=options.conversation_pages)
-        search_counts[conversation_id] = search_conversation(
+        search_results[conversation_id] = search_conversation(
             state.client,
             conversation_id,
             state.tweets,
@@ -376,7 +387,10 @@ def search_selected_conversations(
             reporter,
             "X_CONVERSATION_SEARCH_DONE",
             conversation_id=conversation_id,
-            search_results=search_counts[conversation_id],
+            search_results=search_results[conversation_id].result_count,
+            pages_fetched=search_results[conversation_id].pages_fetched,
+            has_more=search_results[conversation_id].has_more,
+            missing_references=len(search_results[conversation_id].missing_reference_ids),
             conversation_posts=len(conv_ids),
             api_calls=state.client.call_count,
         )
@@ -386,7 +400,48 @@ def search_selected_conversations(
         searched=conversation_search_run,
         skipped_cached=conversation_search_skipped,
     )
-    return search_counts
+    return search_results
+
+
+def source_completeness_payload(
+    conversation_id: str,
+    root_tweet: dict | None,
+    items: list[dict],
+    all_tweets: dict[str, dict],
+    search_result: ConversationSearchResult | None,
+) -> dict[str, Any]:
+    missing_reference_ids = {
+        ref_id
+        for item in items
+        for ref_id in referenced_ids(item)
+        if ref_id and ref_id not in all_tweets
+    }
+    if search_result:
+        missing_reference_ids.update(search_result.missing_reference_ids)
+    root_present = bool(root_tweet)
+    if search_result and search_result.has_more:
+        status = "conversation_search_limited"
+    elif not root_present or missing_reference_ids:
+        status = "api_partial_missing_references"
+    elif search_result:
+        status = "conversation_search_exhausted"
+    else:
+        status = "not_searched_cached"
+    payload: dict[str, Any] = {
+        "status": status,
+        "root_tweet_present": root_present,
+        "missing_root_tweet": not root_present,
+        "missing_reference_ids": sorted(missing_reference_ids),
+    }
+    if search_result:
+        payload["conversation_search"] = {
+            "result_count": search_result.result_count,
+            "pages_requested": search_result.pages_requested,
+            "pages_fetched": search_result.pages_fetched,
+            "has_more": search_result.has_more,
+            "error_count": search_result.error_count,
+        }
+    return payload
 
 
 def assemble_conversations(
@@ -429,6 +484,7 @@ def write_conversation_records(
     paths: XCapturePaths,
     state: XCaptureState,
     conversations: dict[str, list[dict]],
+    search_results: dict[str, ConversationSearchResult],
     options: XCaptureOptions,
     context: XCaptureContext,
     media_paths: dict[str, str],
@@ -443,6 +499,13 @@ def write_conversation_records(
         local_media = thread_local_media(state.media, items)
         local_media_paths = thread_local_media_paths(media_paths, items)
         root_tweet = state.tweets.get(conversation_id)
+        source_completeness = source_completeness_payload(
+            conversation_id,
+            root_tweet,
+            items,
+            state.tweets,
+            search_results.get(conversation_id),
+        )
         created_at = thread_created_at(root_tweet, items)
         title, _slug = thread_title(root_tweet, items)
         op_tickers = root_post_tickers(root_tweet)
@@ -470,6 +533,8 @@ def write_conversation_records(
                 "media": local_media,
                 "media_paths": local_media_paths,
                 "non_photo_media": non_photo_media_placeholders(items, local_media, context),
+                "source_completeness": source_completeness,
+                "completeness_status": source_completeness["status"],
                 "feed": context.feed_record(kind="live_capture_or_cached_update", raw_api_used=True, x_api_called=True),
                 "ignored": True,
                 "ignored_reason": reason,
@@ -542,7 +607,8 @@ def write_conversation_records(
                             **analysis_field_payload(analysis_metadata),
                             "analysis": analysis,
                             "analysis_stage": existing_data.get("analysis_stage") or "captured_pending_ai_pass1",
-                            "completeness_status": "conversation_search_partial",
+                            "source_completeness": source_completeness,
+                            "completeness_status": source_completeness["status"],
                             "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                             "tweets": items,
                             "users": state.users,
@@ -610,13 +676,14 @@ def run_live_x_capture(
     fetch_seed_context(state, options, context, reporter)
     conversation_ids = discover_conversation_ids(state.tweets, options, context)
     emit_checkpoint(reporter, "THREAD_DISCOVERY_DONE", conversations=len(conversation_ids), cached=len(state.cached_conversation_ids))
-    search_selected_conversations(state, conversation_ids, options, reporter)
+    search_results = search_selected_conversations(paths, state, conversation_ids, options, reporter)
     conversations = assemble_conversations(state.tweets, conversation_ids, context)
     media_paths = download_conversation_media(paths, conversations, state.media, reporter)
     entries, ignored_this_run = write_conversation_records(
         paths,
         state,
         conversations,
+        search_results,
         options,
         context,
         media_paths,
