@@ -16,9 +16,14 @@ The workflow layer is responsible for:
 
 ```bash
 investment-tool workflow update
+investment-tool workflow sync
 investment-tool workflow rebuild --stage render
+investment-tool workflow rebuild --stage prices
 investment-tool workflow check
 ```
+
+`update`/`sync` are the normal frequent production cycle. Market prices are not
+in that cycle; run `prices` explicitly through rebuild or a separate scheduler.
 
 ## Boundaries
 

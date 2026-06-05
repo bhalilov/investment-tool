@@ -27,7 +27,7 @@ from investment_tool.feeds.x.jobs import run_x_action
 
 # Keep stage order explicit and boring. Scheduled update and manual rebuild have
 # different intent, so they get separate ordered lists instead of one clever DAG.
-UPDATE_STAGE_ORDER = ("x-capture", "screenshots", "prices", "descriptions", "render")
+UPDATE_STAGE_ORDER = ("x-capture", "screenshots", "descriptions", "render")
 REBUILD_ALL_STAGE_ORDER = ("x-raw", "screenshots", "prices", "descriptions", "render", "articles")
 REBUILD_STAGE_CHOICES = (
     *REBUILD_ALL_STAGE_ORDER,
@@ -254,10 +254,7 @@ def move_screenshot_inputs(paths: Sequence[Path], status: str) -> Path:
 
 
 def resolve_stage_argv(stage: WorkflowStage, args: argparse.Namespace) -> list[str]:
-    argv = [item.replace("{feed_config}", stage.feed_config) for item in stage.argv]
-    if stage.stage == "prices" and getattr(args, "command", "") in {"update", "sync", "refresh"} and not getattr(args, "force", False):
-        argv.append("--incremental")
-    return argv
+    return [item.replace("{feed_config}", stage.feed_config) for item in stage.argv]
 
 
 def run_module_main_stage(stage: WorkflowStage, args: argparse.Namespace) -> int:

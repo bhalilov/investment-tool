@@ -189,10 +189,13 @@ V1 scheduled update stage order:
 ```text
 1. x-capture
 2. screenshots
-3. prices
-4. descriptions
-5. render
+3. descriptions
+4. render
 ```
+
+Market prices are intentionally not part of the normal 15-minute production
+cycle. They are a provider-paced context refresh and should be run deliberately
+through `workflow rebuild --stage prices` or by a separate scheduler cadence.
 
 Failure policy:
 
@@ -239,7 +242,7 @@ Backfill/rebuild targets:
 - hourly bars for the last 7 days;
 - 15-minute bars for the last 48 hours.
 
-Incremental update:
+Explicit refresh/rebuild:
 
 - refresh currently due windows;
 - prefer provider bars at the target granularity;

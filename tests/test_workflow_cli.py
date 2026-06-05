@@ -37,7 +37,14 @@ class WorkflowCliTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertIn("DRY_RUN=true", stdout)
-        self.assertIn("STAGES=x-capture,screenshots,prices,descriptions,render", stdout)
+        self.assertIn("STAGES=x-capture,screenshots,descriptions,render", stdout)
+        self.assertNotIn("prices", stdout)
+
+    def test_workflow_update_rejects_prices_as_prod_cycle_stage(self):
+        code, _stdout, stderr = self.call_cli(["workflow", "update", "--stage", "prices", "--dry-run"])
+
+        self.assertEqual(code, 2)
+        self.assertIn("invalid choice", stderr)
 
     def test_non_workflow_command_is_rejected(self):
         code, stdout, stderr = self.call_cli(["storage", "--help"])
@@ -108,24 +115,7 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(result.status, "success")
         self.assertEqual(seen, [("prices", "investment_tool.context.prices")])
 
-    def test_workflow_update_passes_incremental_to_prices(self):
-        stage = WorkflowStage(
-            stage="prices",
-            module_id="prices",
-            platform="market_data",
-            kind="context_data",
-            entrypoint="investment_tool.context.prices",
-            feed_config="",
-            runner="module_main",
-            action="",
-            argv=(),
-        )
-
-        argv = workflow_run.resolve_stage_argv(stage, argparse.Namespace(command="update", force=False))
-
-        self.assertIn("--incremental", argv)
-
-    def test_workflow_rebuild_does_not_pass_incremental_to_prices(self):
+    def test_price_stage_resolver_leaves_manual_rebuild_full_refresh(self):
         stage = WorkflowStage(
             stage="prices",
             module_id="prices",

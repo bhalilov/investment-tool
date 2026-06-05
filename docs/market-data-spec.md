@@ -27,7 +27,12 @@ The locked workflow needs:
 - daily OHLCV from March 1, 2026 to now;
 - hourly bars for the last 7 days;
 - 15-minute bars for the last 48 hours;
-- incremental refresh of currently due windows.
+- incremental refresh of currently due windows when the `prices` stage is run
+  explicitly.
+
+Market prices are not part of the normal 15-minute `workflow update` /
+`workflow sync` production cycle. Run them with `workflow rebuild --stage
+prices` or a separate scheduler cadence.
 
 Do not derive daily/hourly bars by aggregating 15-minute bars unless explicitly
 approved later. Prefer provider bars at the requested granularity.
