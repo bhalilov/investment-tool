@@ -47,5 +47,14 @@ stabilization pass.
 | 1 | Run a fresh small X smoke after `source_completeness` was added | Done: scratch run wrote 5 fresh records with explicit `source_completeness` values | Scratch capture/render produces fresh records whose JSON shows clear source completeness fields |
 | 2 | Re-assess staged X raw rebuild delta | Done: staged rebuild has 765 active candidates vs 736 active, with 29 recoverable extras; defer promotion until missing media and source-completeness normalization are handled | We know why staged rebuild has more records than active and choose promote/defer/repair |
 | 3 | Finish market price windows | Done in code and scratch-tested on 2 listings; full-universe production sync remains a deliberate provider-paced run | Provider-native daily/hourly/intraday outputs exist with USD normalization and tests |
-| 4 | Run limited media description test | Pending | A small paid test writes neutral image-description JSON with visible cost/reporting |
-| 5 | Check screenshot workflow readiness | Pending | Scheduled screenshot inbox behavior is verified or concrete missing pieces are listed |
+| 4 | Run limited media description test | Done: 2-image `gpt-5.5` scratch test wrote neutral visual records; estimated cost `$0.060725` | A small paid test writes neutral image-description JSON with visible cost/reporting |
+| 5 | Check screenshot workflow readiness | Checked: empty scheduled stage succeeds with no cost; non-empty import/reconstruction dry-run works; pending gap is converting reconstructed screenshot threads into canonical per-thread records/pages | Scheduled screenshot inbox behavior is verified or concrete missing pieces are listed |
+
+## Newly Confirmed Follow-Ups
+
+| Area | Follow-up | Reason |
+| --- | --- | --- |
+| X raw rebuild | Normalize raw-rebuilt records with `source_completeness` before active promotion | Staged raw rebuild recovers 29 extra records but currently has more media warnings and less precise completeness metadata than live capture |
+| X raw rebuild | Recover/download missing still-image media before active promotion | Staged rebuild has 24 active media warnings vs 6 active warnings today |
+| Market prices | Run full-universe production price sync deliberately | Code is ready and scratch-tested, but the provider can rate-limit and should be run as a visible longer job |
+| Screenshot records | Convert reconstructed screenshot bundle threads into canonical per-thread records and presentation pages | Current screenshot AI reconstructs bundle JSON but does not yet create normal thread records comparable to X API records |
