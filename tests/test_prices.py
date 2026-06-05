@@ -72,6 +72,39 @@ class PricesTests(unittest.TestCase):
         self.assertAlmostEqual(converted[1]["close"], 25.0)
         self.assertEqual(converted[1]["original_close"], 200)
 
+    def test_timestamp_rows_are_converted_using_date_part(self):
+        rows = [
+            {
+                "timestamp": "2026-06-04T14:30:00+00:00",
+                "open": 100,
+                "high": 110,
+                "low": 90,
+                "close": 105,
+                "adjusted_close": 105,
+            }
+        ]
+        fx_cache = {
+            "EUR": (
+                {"2026-06-04": 1.1},
+                {"fx_provider": "fixture", "fx_provider_symbol": "EURUSD=X", "fx_direction": "direct", "fx_currency": "EUR"},
+            )
+        }
+
+        converted, _ = market_prices.convert_rows_to_usd(rows, "EUR", fx_cache, "2026-06-01", "2026-06-05")
+
+        self.assertEqual(converted[0]["date"], "2026-06-04")
+        self.assertEqual(converted[0]["timestamp"], "2026-06-04T14:30:00+00:00")
+        self.assertAlmostEqual(converted[0]["close"], 115.5)
+
+    def test_window_start_dates_use_configured_lookbacks(self):
+        self.assertEqual(market_prices.window_start_date("daily", "2026-03-01", "2026-06-05"), "2026-03-01")
+        self.assertEqual(market_prices.window_start_date("hourly", "2026-03-01", "2026-06-05"), "2026-05-29")
+        self.assertEqual(market_prices.window_start_date("intraday", "2026-03-01", "2026-06-05"), "2026-06-03")
+
+    def test_selected_windows_deduplicates_or_defaults_to_all(self):
+        self.assertEqual(market_prices.selected_windows(["daily", "daily", "hourly"]), ["daily", "hourly"])
+        self.assertEqual(market_prices.selected_windows([]), ["daily", "hourly", "intraday"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -36,3 +36,16 @@ old code.
 6. Design retrieval v2 around dated/as-of evidence, time-aware search, and
    replacement/deletion semantics.
 7. Add future local API/UI only after the evidence model is no longer changing.
+
+## Active Next Five
+
+These are the currently approved near-term execution items from the workflow
+stabilization pass.
+
+| # | Item | Current status | Done when |
+| --- | --- | --- | --- |
+| 1 | Run a fresh small X smoke after `source_completeness` was added | Done: scratch run wrote 5 fresh records with explicit `source_completeness` values | Scratch capture/render produces fresh records whose JSON shows clear source completeness fields |
+| 2 | Re-assess staged X raw rebuild delta | Done: staged rebuild has 765 active candidates vs 736 active, with 29 recoverable extras; defer promotion until missing media and source-completeness normalization are handled | We know why staged rebuild has more records than active and choose promote/defer/repair |
+| 3 | Finish market price windows | Done in code and scratch-tested on 2 listings; full-universe production sync remains a deliberate provider-paced run | Provider-native daily/hourly/intraday outputs exist with USD normalization and tests |
+| 4 | Run limited media description test | Pending | A small paid test writes neutral image-description JSON with visible cost/reporting |
+| 5 | Check screenshot workflow readiness | Pending | Scheduled screenshot inbox behavior is verified or concrete missing pieces are listed |

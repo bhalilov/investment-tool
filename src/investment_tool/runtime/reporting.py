@@ -146,6 +146,8 @@ class JobReporter:
         **fields: Any,
     ) -> None:
         payload = {**stats, **fields}
+        if processed is not None:
+            payload.pop("processed", None)
         if token_model:
             payload.update(cost_fields(token_model, payload))
         self.checkpoint(processed=processed, force=force, **payload)

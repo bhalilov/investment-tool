@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download daily market prices for tracked companies."""
+"""Download market prices for tracked companies."""
 
 from __future__ import annotations
 
@@ -29,6 +29,29 @@ FX_SYMBOLS = {
     "HKD": ("USDHKD=X", "inverse"),
     "KRW": ("USDKRW=X", "inverse"),
 }
+WINDOWS = {
+    "daily": {
+        "massive_multiplier": 1,
+        "massive_timespan": "day",
+        "yahoo_interval": "1d",
+        "storage_attr": "prices_daily",
+        "lookback_days": None,
+    },
+    "hourly": {
+        "massive_multiplier": 1,
+        "massive_timespan": "hour",
+        "yahoo_interval": "1h",
+        "storage_attr": "prices_hourly",
+        "lookback_days": 7,
+    },
+    "intraday": {
+        "massive_multiplier": 15,
+        "massive_timespan": "minute",
+        "yahoo_interval": "15m",
+        "storage_attr": "prices_intraday",
+        "lookback_days": 2,
+    },
+}
 
 
 def safe_symbol(symbol: str) -> str:
@@ -45,6 +68,14 @@ def iso_from_ms(value: int) -> str:
 
 def iso_from_seconds(value: int) -> str:
     return dt.datetime.fromtimestamp(value, dt.timezone.utc).date().isoformat()
+
+
+def iso_datetime_from_ms(value: int) -> str:
+    return dt.datetime.fromtimestamp(value / 1000, dt.timezone.utc).isoformat()
+
+
+def iso_datetime_from_seconds(value: int) -> str:
+    return dt.datetime.fromtimestamp(value, dt.timezone.utc).isoformat()
 
 
 def request_json(url: str, headers: dict[str, str] | None = None, retries: int = 3) -> dict[str, Any]:
@@ -64,7 +95,15 @@ def request_json(url: str, headers: dict[str, str] | None = None, retries: int =
             raise RuntimeError(f"HTTP {exc.code}: {body[:500]}") from exc
 
 
-def massive_daily(symbol: str, start: str, end: str, api_key: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def massive_bars(
+    symbol: str,
+    start: str,
+    end: str,
+    api_key: str,
+    multiplier: int,
+    timespan: str,
+    window: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     params = urllib.parse.urlencode(
         {
             "adjusted": "true",
@@ -75,14 +114,16 @@ def massive_daily(symbol: str, start: str, end: str, api_key: str) -> tuple[list
     )
     url = (
         f"{MASSIVE_BASE}/v2/aggs/ticker/{urllib.parse.quote(symbol, safe='')}"
-        f"/range/1/day/{start}/{end}?{params}"
+        f"/range/{multiplier}/{timespan}/{start}/{end}?{params}"
     )
     data = request_json(url)
     rows = []
     for item in data.get("results") or []:
+        timestamp = iso_datetime_from_ms(item["t"])
         rows.append(
             {
-                "date": iso_from_ms(item["t"]),
+                "date": timestamp[:10],
+                **({} if window == "daily" else {"timestamp": timestamp}),
                 "open": item.get("o"),
                 "high": item.get("h"),
                 "low": item.get("l"),
@@ -99,11 +140,17 @@ def massive_daily(symbol: str, start: str, end: str, api_key: str) -> tuple[list
         "status": data.get("status"),
         "results_count": data.get("resultsCount") or len(rows),
         "adjusted": True,
+        "window": window,
+        "provider_interval": f"{multiplier}/{timespan}",
     }
     return rows, meta
 
 
-def yahoo_daily(symbol: str, start: str, end: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def massive_daily(symbol: str, start: str, end: str, api_key: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    return massive_bars(symbol, start, end, api_key, 1, "day", "daily")
+
+
+def yahoo_bars(symbol: str, start: str, end: str, interval: str, window: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     start_dt = dt.datetime.combine(parse_date(start), dt.time.min, tzinfo=dt.timezone.utc)
     # Yahoo period2 is exclusive. Add one day so the requested end date is included.
     end_dt = dt.datetime.combine(parse_date(end) + dt.timedelta(days=1), dt.time.min, tzinfo=dt.timezone.utc)
@@ -111,7 +158,7 @@ def yahoo_daily(symbol: str, start: str, end: str) -> tuple[list[dict[str, Any]]
         {
             "period1": int(start_dt.timestamp()),
             "period2": int(end_dt.timestamp()),
-            "interval": "1d",
+            "interval": interval,
             "events": "history",
             "includeAdjustedClose": "true",
         }
@@ -131,9 +178,11 @@ def yahoo_daily(symbol: str, start: str, end: str) -> tuple[list[dict[str, Any]]
         close = (quote.get("close") or [None] * len(timestamps))[i]
         if close is None:
             continue
+        timestamp = iso_datetime_from_seconds(ts)
         rows.append(
             {
-                "date": iso_from_seconds(ts),
+                "date": timestamp[:10],
+                **({} if window == "daily" else {"timestamp": timestamp}),
                 "open": (quote.get("open") or [None] * len(timestamps))[i],
                 "high": (quote.get("high") or [None] * len(timestamps))[i],
                 "low": (quote.get("low") or [None] * len(timestamps))[i],
@@ -152,8 +201,14 @@ def yahoo_daily(symbol: str, start: str, end: str) -> tuple[list[dict[str, Any]]
         "instrument_type": meta_src.get("instrumentType"),
         "results_count": len(rows),
         "adjusted": True,
+        "window": window,
+        "provider_interval": interval,
     }
     return rows, meta
+
+
+def yahoo_daily(symbol: str, start: str, end: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    return yahoo_bars(symbol, start, end, "1d", "daily")
 
 
 def fx_daily(currency: str, start: str, end: str) -> tuple[dict[str, float], dict[str, Any]]:
@@ -189,6 +244,7 @@ def convert_rows_to_usd(
         converted = []
         for row in rows:
             copied = dict(row)
+            copied["date"] = row_bar_date(copied)
             copied["currency"] = "USD"
             copied["fx_rate_to_usd"] = 1.0
             copied["original_currency"] = "USD"
@@ -204,14 +260,16 @@ def convert_rows_to_usd(
     missing_dates: list[str] = []
     price_fields = ("open", "high", "low", "close", "adjusted_close")
     for row in rows:
-        rate = rates.get(row["date"])
+        row_date = row_bar_date(row)
+        rate = rates.get(row_date)
         if rate is None:
-            missing_dates.append(row["date"])
+            missing_dates.append(row_date)
             rate = last_rate
         if rate is None:
-            raise RuntimeError(f"Missing FX rate for {currency} on {row['date']}")
+            raise RuntimeError(f"Missing FX rate for {currency} on {row_date}")
         last_rate = rate
         copied = dict(row)
+        copied["date"] = row_date
         copied["original_currency"] = currency
         for field in price_fields:
             value = copied.get(field)
@@ -230,6 +288,16 @@ def convert_rows_to_usd(
     }
 
 
+def row_bar_date(row: dict[str, Any]) -> str:
+    value = str(row.get("date") or "")
+    if value:
+        return value[:10]
+    timestamp = str(row.get("timestamp") or "")
+    if timestamp:
+        return timestamp[:10]
+    raise RuntimeError("Price row missing date/timestamp")
+
+
 def should_try_massive(symbol: str, market: str) -> bool:
     if "." in symbol:
         return False
@@ -238,18 +306,34 @@ def should_try_massive(symbol: str, market: str) -> bool:
     return market.upper() == "US"
 
 
-def fetch_listing(symbol: str, market: str, start: str, end: str, api_key: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def fetch_listing(
+    symbol: str,
+    market: str,
+    start: str,
+    end: str,
+    api_key: str,
+    window: str = "daily",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     errors: list[str] = []
+    window_config = WINDOWS[window]
     if api_key and should_try_massive(symbol, market):
         try:
-            rows, meta = massive_daily(symbol, start, end, api_key)
+            rows, meta = massive_bars(
+                symbol,
+                start,
+                end,
+                api_key,
+                int(window_config["massive_multiplier"]),
+                str(window_config["massive_timespan"]),
+                window,
+            )
             if rows:
                 return rows, meta
             errors.append("massive returned no bars")
         except Exception as exc:
             errors.append(f"massive: {exc}")
     try:
-        rows, meta = yahoo_daily(symbol, start, end)
+        rows, meta = yahoo_bars(symbol, start, end, str(window_config["yahoo_interval"]), window)
         if rows:
             if errors:
                 meta["fallback_from"] = errors
@@ -260,12 +344,37 @@ def fetch_listing(symbol: str, market: str, start: str, end: str, api_key: str) 
     raise RuntimeError("; ".join(errors) or "no provider attempted")
 
 
+def selected_windows(values: list[str]) -> list[str]:
+    if not values:
+        return list(WINDOWS)
+    return list(dict.fromkeys(values))
+
+
+def window_start_date(window: str, configured_start: str, end: str) -> str:
+    lookback = WINDOWS[window]["lookback_days"]
+    if lookback is None:
+        return configured_start
+    end_date = parse_date(end)
+    return (end_date - dt.timedelta(days=int(lookback))).isoformat()
+
+
+def iter_listings(companies: list[dict[str, Any]], limit: int = 0) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    pairs = [
+        (company, listing)
+        for company in companies
+        for listing in company.get("listings") or []
+    ]
+    return pairs[:limit] if limit else pairs
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Sync daily OHLCV prices for tracked companies.")
+    parser = argparse.ArgumentParser(description="Sync OHLCV prices for tracked companies.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
     parser.add_argument("--data-dir", default="")
     parser.add_argument("--from", dest="start", default="")
     parser.add_argument("--to", dest="end", default=dt.date.today().isoformat())
+    parser.add_argument("--window", action="append", choices=tuple(WINDOWS), default=[], help="Sync only this window; repeatable.")
+    parser.add_argument("--limit-listings", type=int, default=0, help="Limit listing count for smoke tests.")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--sleep", type=float, default=13.0, help="Seconds between Massive requests.")
     args = parser.parse_args(argv)
@@ -279,10 +388,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     start = args.start or config.get("start_date") or "2026-03-01"
     end = args.end
     companies = config.get("companies") or []
-    total_listings = sum(len(company.get("listings") or []) for company in companies)
+    windows = selected_windows(args.window)
+    listing_pairs = iter_listings(companies, args.limit_listings)
+    total_units = len(listing_pairs) * len(windows)
     reporter = start_reporter(
         "prices",
-        total=total_listings,
+        total=total_units,
         every_items=3,
         every_seconds=30,
         mode="sync",
@@ -290,19 +401,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         data_dir=portable_path(data_dir),
         start=start,
         end=end,
+        windows=",".join(windows),
         companies=len(companies),
-        listings=total_listings,
+        listings=len(listing_pairs),
         massive_key_present=str(bool(api_key)).lower(),
         provider_usage_available="false",
     )
     out_root = storage.prices_root
-    daily_dir = storage.prices_daily
-    daily_dir.mkdir(parents=True, exist_ok=True)
+    for window in windows:
+        getattr(storage, str(WINDOWS[window]["storage_attr"])).mkdir(parents=True, exist_ok=True)
 
     manifest: dict[str, Any] = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "start": start,
         "end": end,
+        "windows": windows,
         "config": portable_path(config_path.resolve()),
         "companies": [],
         "errors": [],
@@ -316,6 +429,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "yahoo_calls": 0,
         "errors": 0,
     }
+    wanted_ids = {(id(company), id(listing)) for company, listing in listing_pairs}
     for company in companies:
         company_record = {
             "name": company.get("name"),
@@ -325,69 +439,83 @@ def main(argv: Sequence[str] | None = None) -> int:
             "listings": [],
         }
         for listing in company.get("listings") or []:
+            if (id(company), id(listing)) not in wanted_ids:
+                continue
             symbol = str(listing["symbol"])
             market = str(listing.get("market") or "")
-            if api_key and should_try_massive(symbol, market):
-                elapsed = time.monotonic() - last_massive
-                if elapsed < args.sleep:
-                    wait = args.sleep - elapsed
-                    reporter.checkpoint_stats(stats, processed=stats["processed"], force=True, waiting_seconds=round(wait, 2), reason="provider_pacing")
-                    time.sleep(wait)
-                last_massive = time.monotonic()
-            try:
-                rows, meta = fetch_listing(symbol, market, start, end, api_key)
-                rows, conversion_meta = convert_rows_to_usd(rows, meta.get("currency") or "USD", fx_cache, start, end)
-                meta.update(conversion_meta)
-                out_path = daily_dir / f"{safe_symbol(symbol)}.json"
-                payload = {
-                    "company": company.get("name"),
-                    "symbol": symbol,
-                    "market": market,
-                    "role": listing.get("role"),
-                    "from": start,
-                    "to": end,
-                    **meta,
-                    "bars": rows,
-                }
-                out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-                company_record["listings"].append(
-                    {
+            listing_record = {
+                "symbol": symbol,
+                "market": market,
+                "role": listing.get("role"),
+                "windows": [],
+            }
+            for window in windows:
+                window_start = window_start_date(window, start, end)
+                if api_key and should_try_massive(symbol, market):
+                    elapsed = time.monotonic() - last_massive
+                    if elapsed < args.sleep:
+                        wait = args.sleep - elapsed
+                        reporter.checkpoint_stats(stats, processed=stats["processed"], force=True, waiting_seconds=round(wait, 2), reason="provider_pacing")
+                        time.sleep(wait)
+                    last_massive = time.monotonic()
+                try:
+                    rows, meta = fetch_listing(symbol, market, window_start, end, api_key, window)
+                    rows, conversion_meta = convert_rows_to_usd(rows, meta.get("currency") or "USD", fx_cache, window_start, end)
+                    meta.update(conversion_meta)
+                    window_dir = getattr(storage, str(WINDOWS[window]["storage_attr"]))
+                    out_path = window_dir / f"{safe_symbol(symbol)}.json"
+                    payload = {
+                        "company": company.get("name"),
                         "symbol": symbol,
                         "market": market,
                         "role": listing.get("role"),
-                        "provider": meta.get("provider"),
-                        "rows": len(rows),
-                        "currency": meta.get("currency"),
-                        "path": portable_path(out_path),
+                        "window": window,
+                        "from": window_start,
+                        "to": end,
+                        **meta,
+                        "bars": rows,
                     }
-                )
-                stats["processed"] += 1
-                stats["rows_written"] += len(rows)
-                if meta.get("provider") == "massive":
-                    stats["massive_calls"] += 1
-                elif meta.get("provider") == "yahoo_chart":
-                    stats["yahoo_calls"] += 1
-                stats["errors"] = len(manifest["errors"])
-                reporter.checkpoint_stats(
-                    stats,
-                    processed=stats["processed"],
-                    symbol=symbol,
-                    provider=meta.get("provider"),
-                    rows=len(rows),
-                )
-            except Exception as exc:
-                stats["processed"] += 1
-                error = {
-                    "company": company.get("name"),
-                    "symbol": symbol,
-                    "market": market,
-                    "error": str(exc),
-                }
-                manifest["errors"].append(error)
-                company_record["listings"].append({**error, "role": listing.get("role"), "rows": 0})
-                print(f"ERROR {symbol}: {exc}", file=sys.stderr)
-                stats["errors"] = len(manifest["errors"])
-                reporter.checkpoint_stats(stats, processed=stats["processed"], force=True, symbol=symbol)
+                    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                    listing_record["windows"].append(
+                        {
+                            "window": window,
+                            "provider": meta.get("provider"),
+                            "provider_interval": meta.get("provider_interval"),
+                            "rows": len(rows),
+                            "currency": meta.get("currency"),
+                            "path": portable_path(out_path),
+                        }
+                    )
+                    stats["processed"] += 1
+                    stats["rows_written"] += len(rows)
+                    if meta.get("provider") == "massive":
+                        stats["massive_calls"] += 1
+                    elif meta.get("provider") == "yahoo_chart":
+                        stats["yahoo_calls"] += 1
+                    stats["errors"] = len(manifest["errors"])
+                    reporter.checkpoint_stats(
+                        stats,
+                        processed=stats["processed"],
+                        symbol=symbol,
+                        window=window,
+                        provider=meta.get("provider"),
+                        rows=len(rows),
+                    )
+                except Exception as exc:
+                    stats["processed"] += 1
+                    error = {
+                        "company": company.get("name"),
+                        "symbol": symbol,
+                        "market": market,
+                        "window": window,
+                        "error": str(exc),
+                    }
+                    manifest["errors"].append(error)
+                    listing_record["windows"].append({**error, "rows": 0})
+                    print(f"ERROR {symbol} {window}: {exc}", file=sys.stderr)
+                    stats["errors"] = len(manifest["errors"])
+                    reporter.checkpoint_stats(stats, processed=stats["processed"], force=True, symbol=symbol, window=window)
+            company_record["listings"].append(listing_record)
         manifest["companies"].append(company_record)
 
     manifest_path = out_root / "manifest.json"
@@ -395,7 +523,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     reporter.done_stats(
         stats,
         companies=len(companies),
-        listings=total_listings,
+        listings=len(listing_pairs),
+        windows=",".join(windows),
         manifest=portable_path(manifest_path),
     )
     return 0 if not manifest["errors"] else 1
