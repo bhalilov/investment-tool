@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from investment_tool.presentation.indexes import render_all_indexes
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths_for_x_root
 from investment_tool.runtime.reporting import JobReporter
 from investment_tool.rules.filters import primary_label
@@ -57,15 +56,12 @@ from investment_tool.feeds.x.threads import (
     thread_local_media,
     thread_local_media_paths,
 )
-from investment_tool.presentation.threads import date_prefix, render_thread_html
+from investment_tool.presentation.threads import date_prefix
 from investment_tool.feeds.x.store import (
-    cleanup_old_thread_versions,
-    entries_from_cached_json,
+    cleanup_old_json_versions,
     find_cached_thread_record,
     load_cached_threads,
-    load_owned_tickers,
     move_generated_json_to_ignored,
-    remove_thread_htmls,
     write_ignored_record,
 )
 
@@ -353,7 +349,7 @@ def run_live_x_capture(
     media_paths = download_photos(media, paths.media_dir, wanted_media_keys)
     emit_checkpoint(reporter, "MEDIA_DOWNLOAD_DONE", downloaded=len(media_paths), requested=len(wanted_media_keys))
     ignored_this_run = 0
-    emit_checkpoint(reporter, "THREAD_RENDER_START", conversations=len(by_conversation), ai_enabled=False)
+    emit_checkpoint(reporter, "THREAD_RECORD_WRITE_START", conversations=len(by_conversation), ai_enabled=False)
     for conversation_id, items in by_conversation.items():
         existing_record = find_cached_thread_record(paths.json_dir, conversation_id)
         existing_data = existing_record[1] if existing_record else {}
@@ -395,10 +391,17 @@ def run_live_x_capture(
             if existing_record:
                 existing_json_path, existing_json_data = existing_record
                 existing_json_data.update(ignored_data)
-                move_generated_json_to_ignored(paths.root, existing_json_path, paths.threads_dir, existing_json_data, reason, context)
+                move_generated_json_to_ignored(
+                    paths.root,
+                    existing_json_path,
+                    paths.threads_dir,
+                    existing_json_data,
+                    reason,
+                    context,
+                    remove_html=False,
+                )
             else:
                 write_ignored_record(paths.root, conversation_id, reason, ignored_data, context)
-                remove_thread_htmls(paths.threads_dir, conversation_id, ignored_data.get("canonical_filename"))
             continue
         tldr = rough_tldr(items, context.user_id)
         analysis = existing_data.get("analysis")
@@ -430,31 +433,8 @@ def run_live_x_capture(
                 if analysis_metadata.get("analysis_ready"):
                     tldr = cached_data.get("tldr", tldr)
                     analysis_metadata.update(analysis_field_payload(cached_data))
-        if is_cached and not html_path.exists():
-            is_cached = False
         if not is_cached:
-            cleanup_old_thread_versions(paths.json_dir, paths.threads_dir, conversation_id, json_path, html_path)
-            render_thread_html(
-                html_path,
-                conversation_id,
-                title,
-                thread_type,
-                label,
-                tickers,
-                tags,
-                tldr,
-                analysis_metadata,
-                json_path,
-                items,
-                users,
-                local_media,
-                local_media_paths,
-                search_counts.get(conversation_id, 0),
-                paths.presentation_root,
-                context.username,
-                context.user_id,
-            )
-        if not is_cached:
+            cleanup_old_json_versions(paths.json_dir, conversation_id, json_path)
             json_path.write_text(
                 json.dumps(
                     apply_pending_safe_summary(
@@ -523,22 +503,13 @@ def run_live_x_capture(
             }
         )
 
-    emit_checkpoint(reporter, "THREAD_RENDER_DONE", rendered=len(entries), ignored=ignored_this_run, ai_enabled=False)
-
-    processed_ids = {entry["conversation_id"] for entry in entries}
-    entries.extend(
-        entry for entry in entries_from_cached_json(paths.json_dir, paths.threads_dir, context) if entry["conversation_id"] not in processed_ids
-    )
-
-    render_all_indexes(paths.presentation_root, entries, load_owned_tickers())
-    index_path = paths.presentation_root / "indexes" / "index.html"
-    emit_checkpoint(reporter, "INDEX_RENDER_DONE", entries=len(entries), index=portable_path(index_path))
+    emit_checkpoint(reporter, "THREAD_RECORD_WRITE_DONE", records=len(entries), ignored=ignored_this_run, ai_enabled=False)
     usage = write_usage_estimate(paths.root, run_id, client)
     return {
-        "index": portable_path(index_path),
         "threads": len(entries),
         "ignored": ignored_this_run,
         "raw_api_dir": portable_path(paths.raw_dir),
+        "records_dir": portable_path(paths.json_dir),
         "media_dir": portable_path(paths.media_dir),
         "api_calls": client.call_count,
         "unique_post_reads_estimate": usage["unique_post_ids_returned"],

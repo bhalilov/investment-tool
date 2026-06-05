@@ -199,9 +199,9 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
         force=args.force,
     )
     result = run_live_x_capture(paths, run_id, env_path, token, options, context, reporter)
-    print(f"INDEX={result['index']}")
     print(f"THREADS={result['threads']}")
     print(f"RAW_API_DIR={result['raw_api_dir']}")
+    print(f"RECORDS_DIR={result['records_dir']}")
     print(f"MEDIA_DIR={result['media_dir']}")
     print(f"API_CALLS={result['api_calls']}")
     print(f"UNIQUE_POST_READS_ESTIMATE={result['unique_post_reads_estimate']}")
@@ -214,7 +214,7 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
         unique_post_reads_estimate=result["unique_post_reads_estimate"],
         estimated_x_cost_usd=result["estimated_x_cost_usd"],
         ai_in_capture=False,
-        index=result["index"],
+        records_dir=result["records_dir"],
     )
     return 0
 

@@ -102,6 +102,13 @@ def cleanup_old_thread_versions(json_dir: Path, threads_dir: Path, conversation_
             html_path.unlink()
 
 
+def cleanup_old_json_versions(json_dir: Path, conversation_id: str, keep_json: Path) -> None:
+    """Remove older JSON versions for a conversation without touching presentation files."""
+    for json_path in json_dir.glob(f"*__{conversation_id}.json"):
+        if json_path.resolve() != keep_json.resolve():
+            json_path.unlink(missing_ok=True)
+
+
 def load_owned_tickers() -> set[str]:
     configured = os.environ.get("OWNED_POSITIONS_FILE", "").strip()
     path = resolve_portable_path(configured) if configured else Path.cwd() / DEFAULT_OWNED_POSITIONS_FILE
@@ -157,13 +164,15 @@ def move_generated_json_to_ignored(
     data: dict[str, Any],
     reason: str,
     context: XCaptureContext,
+    remove_html: bool = True,
 ) -> None:
     conversation_id = str(data.get("conversation_id") or json_path.stem.rsplit("__", 1)[-1])
     data["ignored"] = True
     data["ignored_reason"] = reason
     data["ignored_at"] = data.get("ignored_at") or dt.datetime.now(dt.timezone.utc).isoformat()
     write_ignored_record(root, conversation_id, reason, data, context)
-    remove_thread_htmls(threads_dir, conversation_id, data.get("canonical_filename"))
+    if remove_html:
+        remove_thread_htmls(threads_dir, conversation_id, data.get("canonical_filename"))
     json_path.unlink(missing_ok=True)
 
 
