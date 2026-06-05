@@ -11,6 +11,7 @@ import datetime as dt
 import importlib
 import json
 import os
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ REBUILD_STAGE_CHOICES = (
 ALL_STAGE_NAMES = tuple(dict.fromkeys((*UPDATE_STAGE_ORDER, *REBUILD_STAGE_CHOICES)))
 SCREENSHOT_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 DEFAULT_LOCK_STALE_SECONDS = 6 * 60 * 60
+STAGE_RUNTIME_SUMMARIES: dict[str, str] = {}
 
 
 @dataclass
@@ -181,6 +183,8 @@ def selected_stages(args: argparse.Namespace) -> list[str]:
 
 
 def workflow_x_namespace(args: argparse.Namespace, feed_config_default: str = "", **extra: object) -> argparse.Namespace:
+    command = getattr(args, "command", "")
+    incremental = command in {"update", "sync", "refresh"} and not getattr(args, "force", False)
     values = {
         "feed_config": getattr(args, "feed_config", "") or feed_config_default or default_feed_config(DEFAULT_X_MODULE_ID),
         "feed_id": getattr(args, "feed_id", ""),
@@ -189,6 +193,7 @@ def workflow_x_namespace(args: argparse.Namespace, feed_config_default: str = ""
         "max_threads": getattr(args, "max_threads", 20),
         "conversation_id": getattr(args, "conversation_id", ""),
         "force": getattr(args, "force", False),
+        "incremental": incremental,
         "rebuild_staging_dir": getattr(args, "rebuild_staging_dir", ""),
         "replace_generated_json": getattr(args, "replace_generated_json", False),
     }
@@ -210,6 +215,7 @@ def run_screenshots_stage(stage: WorkflowStage, args: argparse.Namespace) -> int
     if not paths:
         print(f"SCREENSHOTS_INBOX={portable_path(storage_paths().screenshots_inbox)}")
         print("SCREENSHOTS_FOUND=0")
+        STAGE_RUNTIME_SUMMARIES["screenshots"] = "inbox_found=0 processed=0"
         return 0
     argv = [str(path) for path in paths]
     argv.extend(
@@ -225,7 +231,26 @@ def run_screenshots_stage(stage: WorkflowStage, args: argparse.Namespace) -> int
     )
     if getattr(args, "force", False):
         argv.append("--force")
-    return screenshot_bundles.main(argv)
+    code = screenshot_bundles.main(argv)
+    if not getattr(args, "dry_run", False):
+        move_screenshot_inputs(paths, "processed" if code == 0 else "failed")
+    return code
+
+
+def move_screenshot_inputs(paths: Sequence[Path], status: str) -> Path:
+    run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S")
+    dest_dir = storage_paths().screenshots_root / status / run_id
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for index, path in enumerate(paths, start=1):
+        if not path.exists():
+            continue
+        dest = dest_dir / path.name
+        if dest.exists():
+            dest = dest_dir / f"{index:03d}_{path.name}"
+        shutil.move(str(path), str(dest))
+    print(f"SCREENSHOTS_MOVED_{status.upper()}={len(paths)}")
+    print(f"SCREENSHOTS_{status.upper()}_DIR={portable_path(dest_dir)}")
+    return dest_dir
 
 
 def resolve_stage_argv(stage: WorkflowStage, args: argparse.Namespace) -> list[str]:
@@ -261,6 +286,10 @@ def run_descriptions_stage(stage: WorkflowStage, args: argparse.Namespace) -> in
         print(f"DESCRIPTIONS_MEDIA_KEYS={len(media_keys)}")
         if not media_keys:
             print("DESCRIPTIONS_SKIPPED=no_media_keys_from_latest_capture")
+            STAGE_RUNTIME_SUMMARIES["descriptions"] = (
+                "scope=latest_x_capture seen=0 analyzed=0 skipped=0 failed=0 estimated_openai_cost_usd=0 "
+                "reason=no_media_keys_from_latest_capture"
+            )
             return 0
         for key in media_keys:
             description_args.extend(["--media-key", key])
@@ -283,7 +312,7 @@ def latest_x_capture_media_keys() -> list[str]:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
     except Exception:
         return []
-    keys = data.get("description_media_keys") or []
+    keys = data.get("description_candidate_media_keys") or data.get("description_media_keys") or []
     if not isinstance(keys, list):
         return []
     return sorted({str(key).strip() for key in keys if str(key).strip()})
@@ -301,7 +330,8 @@ def run_stage(stage_name: str, args: argparse.Namespace) -> StageResult:
         if not runner:
             return StageResult(stage_name, "failed", 2, f"unknown stage runner: {stage.runner}", started, iso_now())
         code = runner(stage, args)
-        return StageResult(stage_name, "success" if code == 0 else "failed", code, "", started, iso_now())
+        status = "success" if code == 0 else "failed"
+        return StageResult(stage_name, status, code, stage_summary(stage_name), started, iso_now())
     except Exception as exc:
         return StageResult(stage_name, "failed", 1, str(exc), started, iso_now())
 
@@ -361,6 +391,60 @@ def run_workflow_check(command: str) -> int:
 
 def json_like(value: dict[str, Any]) -> str:
     return " ".join(f"{key}={value[key]}" for key in sorted(value))
+
+
+def read_json_object(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def stage_summary(stage_name: str) -> str:
+    runtime_summary = STAGE_RUNTIME_SUMMARIES.pop(stage_name, "")
+    if runtime_summary:
+        return runtime_summary
+    paths = storage_paths()
+    if stage_name == "x-capture":
+        data = read_json_object(paths.x_usage / "latest_capture_manifest.json")
+        if data:
+            return (
+                f"threads={data.get('threads', 0)} changed={len(data.get('changed_conversation_ids') or [])} "
+                f"cached_loaded={data.get('loaded_cached_conversations', len(data.get('cached_conversation_ids') or []))} "
+                f"cached_selected={len(data.get('cached_conversation_ids') or [])} ignored={data.get('ignored', 0)} "
+                f"description_candidates={len(data.get('description_candidate_media_keys') or data.get('description_media_keys') or [])} "
+                f"api_calls={data.get('api_calls', 0)} estimated_x_cost_usd={data.get('estimated_x_cost_usd', 0)}"
+            )
+    if stage_name == "prices":
+        data = read_json_object(paths.prices_manifest)
+        stats = data.get("stats") or {}
+        if stats:
+            return (
+                f"processed={stats.get('processed', 0)} skipped={stats.get('skipped', 0)} "
+                f"rows_written={stats.get('rows_written', 0)} massive_calls={stats.get('massive_calls', 0)} "
+                f"yahoo_calls={stats.get('yahoo_calls', 0)} errors={stats.get('errors', 0)}"
+            )
+    if stage_name == "descriptions":
+        data = read_json_object(paths.x_descriptions / "manifest.json")
+        if data:
+            return (
+                f"seen={data.get('seen', 0)} analyzed={data.get('analyzed', 0)} skipped={data.get('skipped', 0)} "
+                f"failed={data.get('failed', 0)} estimated_openai_cost_usd={data.get('estimated_openai_cost_usd', 0)}"
+            )
+    if stage_name == "render":
+        data = read_json_object(paths.x_usage / "latest_render_manifest.json")
+        if data:
+            return (
+                f"scope={data.get('scope', '')} rendered_threads={data.get('rendered_threads', 0)} "
+                f"indexed_threads={data.get('indexed_threads', 0)} ignored={data.get('ignored', 0)}"
+            )
+    if stage_name == "screenshots":
+        inbox_count = len(screenshot_inbox_paths())
+        return f"inbox_remaining={inbox_count}"
+    return ""
 
 
 def should_skip_stage_due_to_failure(stage: str, results: Sequence[StageResult]) -> str | None:

@@ -264,9 +264,13 @@ def rerender_cached_threads(
     conversation_id: str | None,
     context: XCaptureContext,
     presentation_root: Path | None = None,
+    conversation_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     index_root = presentation_root or root
     entries: list[dict[str, Any]] = []
+    target_ids = set(conversation_ids or set())
+    if conversation_id:
+        target_ids.add(conversation_id)
     for source_json_path in sorted(json_dir.glob("*.json")):
         try:
             data = json.loads(source_json_path.read_text(encoding="utf-8"))
@@ -274,7 +278,7 @@ def rerender_cached_threads(
             warn_json_read_failed("x-store", source_json_path, exc, "rerender_cached_threads")
             continue
         conv_id = data.get("conversation_id")
-        if not conv_id or (conversation_id and conv_id != conversation_id):
+        if not conv_id or (target_ids and conv_id not in target_ids):
             continue
         if data.get("ignored"):
             move_generated_json_to_ignored(root, source_json_path, threads_dir, data, data.get("ignored_reason") or "IGNORED", context)
@@ -379,7 +383,7 @@ def rerender_cached_threads(
                 **context.feed_entry_fields(updated),
             }
         )
-    if conversation_id:
+    if target_ids:
         processed = {entry["conversation_id"] for entry in entries}
         entries.extend(entry for entry in entries_from_cached_json(json_dir, threads_dir, context) if entry["conversation_id"] not in processed)
     return entries or entries_from_cached_json(json_dir, threads_dir, context)

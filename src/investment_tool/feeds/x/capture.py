@@ -7,6 +7,7 @@ media. Thread AI and vector sync intentionally live elsewhere.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
 from collections import defaultdict
@@ -44,6 +45,7 @@ from investment_tool.feeds.x.api import (
     fetch_timeline,
     fetch_tweets_by_ids,
     fetch_tweets_by_ids_even_if_cached,
+    photo_media_path,
     refresh_x_user_token,
     search_conversation,
 )
@@ -77,6 +79,7 @@ class XCaptureOptions:
     max_threads: int = 20
     conversation_id: str = ""
     force: bool = False
+    incremental: bool = False
 
 
 @dataclass(frozen=True)
@@ -100,6 +103,22 @@ class XCaptureState:
     @property
     def cached_conversation_ids(self) -> set[str]:
         return set(self.cached_tweet_ids)
+
+
+@dataclass
+class XRecordWriteResult:
+    entries: list[dict[str, Any]]
+    ignored: int
+    changed_conversation_ids: set[str]
+    cached_conversation_ids: set[str]
+    ignored_conversation_ids: set[str]
+
+
+@dataclass
+class XMediaDownloadResult:
+    media_paths: dict[str, str]
+    downloaded_media_keys: set[str]
+    requested_media_keys: set[str]
 
 
 def prepare_x_capture_paths(run_id: str, feed_root: str | Path | None = None) -> XCapturePaths:
@@ -206,11 +225,35 @@ def write_capture_manifest(
     run_id: str,
     raw_dir: Path,
     entries: list[dict[str, Any]],
-    media_paths: dict[str, str],
+    discovered_conversation_ids: list[str],
+    loaded_cached_conversation_ids: set[str],
+    record_result: XRecordWriteResult,
+    media_result: XMediaDownloadResult,
+    description_candidate_media_keys: set[str],
+    media_conversation_ids: dict[str, set[str]],
+    usage: dict[str, Any],
     ignored: int,
 ) -> dict[str, Any]:
     usage_dir = root / "usage"
     usage_dir.mkdir(parents=True, exist_ok=True)
+    all_conversation_ids = sorted(
+        set(record_result.changed_conversation_ids)
+        | set(record_result.cached_conversation_ids)
+        | set(record_result.ignored_conversation_ids)
+    )
+    changed_conversation_ids = sorted(record_result.changed_conversation_ids)
+    cached_conversation_ids = sorted(record_result.cached_conversation_ids)
+    description_candidate_media_keys = set(description_candidate_media_keys)
+    description_conversation_ids = {
+        conversation_id
+        for key in description_candidate_media_keys
+        for conversation_id in media_conversation_ids.get(key, set())
+    }
+    render_conversation_ids = sorted(
+        set(changed_conversation_ids)
+        | set(record_result.ignored_conversation_ids)
+        | description_conversation_ids
+    )
     record = {
         "run_id": run_id,
         "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -218,8 +261,23 @@ def write_capture_manifest(
         "threads": len(entries),
         "ignored": ignored,
         "conversation_ids": sorted(str(entry.get("conversation_id") or "") for entry in entries if entry.get("conversation_id")),
-        "description_media_keys": sorted(media_paths),
-        "media_paths": {key: media_paths[key] for key in sorted(media_paths)},
+        "discovered_conversation_ids": sorted(discovered_conversation_ids),
+        "loaded_cached_conversation_ids": sorted(loaded_cached_conversation_ids),
+        "loaded_cached_conversations": len(loaded_cached_conversation_ids),
+        "all_conversation_ids": all_conversation_ids,
+        "changed_conversation_ids": changed_conversation_ids,
+        "cached_conversation_ids": cached_conversation_ids,
+        "ignored_conversation_ids": sorted(record_result.ignored_conversation_ids),
+        "render_conversation_ids": render_conversation_ids,
+        "requested_media_keys": sorted(media_result.requested_media_keys),
+        "downloaded_media_keys": sorted(media_result.downloaded_media_keys),
+        "description_media_keys": sorted(description_candidate_media_keys),
+        "description_candidate_media_keys": sorted(description_candidate_media_keys),
+        "media_conversation_ids": {key: sorted(value) for key, value in sorted(media_conversation_ids.items())},
+        "media_paths": {key: media_result.media_paths[key] for key in sorted(media_result.media_paths)},
+        "api_calls": usage.get("api_calls"),
+        "unique_post_reads_estimate": usage.get("unique_post_ids_returned"),
+        "estimated_x_cost_usd": usage.get("estimated_cost_usd"),
     }
     with (usage_dir / "capture_runs.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -315,7 +373,18 @@ def fetch_seed_context(
     reporter: JobReporter | None,
 ) -> list[str]:
     emit_checkpoint(reporter, "X_TIMELINE_FETCH_START", pages=options.timeline_pages)
-    seed_ids = fetch_timeline(state.client, context.user_id, options.timeline_pages, state.tweets, state.users, state.media)
+    known_tweet_ids = set(state.tweets)
+    stop_after_known_streak = min(20, max(1, options.max_threads)) if options.incremental and not options.force else 0
+    seed_ids = fetch_timeline(
+        state.client,
+        context.user_id,
+        options.timeline_pages,
+        state.tweets,
+        state.users,
+        state.media,
+        known_tweet_ids=known_tweet_ids if options.incremental and not options.force else None,
+        stop_after_known_streak=stop_after_known_streak,
+    )
     emit_checkpoint(
         reporter,
         "X_TIMELINE_FETCH_DONE",
@@ -339,8 +408,12 @@ def fetch_seed_context(
             conversation_id=options.conversation_id,
             api_calls=state.client.call_count,
         )
-    emit_checkpoint(reporter, "X_CONTEXT_WALK_START", seed_posts=len(seed_ids))
-    walk_context(state.client, seed_ids, state.tweets, state.users, state.media)
+    if options.incremental and not options.force and not options.conversation_id:
+        context_seed_ids = [tweet_id for tweet_id in seed_ids if tweet_id not in known_tweet_ids]
+    else:
+        context_seed_ids = seed_ids
+    emit_checkpoint(reporter, "X_CONTEXT_WALK_START", seed_posts=len(context_seed_ids), incremental=options.incremental)
+    walk_context(state.client, context_seed_ids, state.tweets, state.users, state.media)
     emit_checkpoint(
         reporter,
         "X_CONTEXT_WALK_DONE",
@@ -356,9 +429,28 @@ def discover_conversation_ids(
     tweets: dict[str, dict],
     options: XCaptureOptions,
     context: XCaptureContext,
+    seed_ids: list[str] | None = None,
+    cached_tweet_ids: dict[str, set[str]] | None = None,
 ) -> list[str]:
     if options.conversation_id:
         return [options.conversation_id]
+    if options.incremental and seed_ids is not None and not options.force:
+        cached_tweet_ids = cached_tweet_ids or {}
+        conversation_ids: list[str] = []
+        for tweet_id in seed_ids:
+            tweet = tweets.get(tweet_id) or {}
+            if tweet.get("author_id") != context.user_id:
+                continue
+            conv = tweet.get("conversation_id")
+            if not conv:
+                continue
+            if tweet_id in cached_tweet_ids.get(conv, set()):
+                continue
+            if conv not in conversation_ids:
+                conversation_ids.append(conv)
+            if len(conversation_ids) >= options.max_threads:
+                break
+        return conversation_ids
     conversation_ids: list[str] = []
     for tweet in sorted(tweets.values(), key=lambda item: item.get("created_at") or "", reverse=True):
         if tweet.get("author_id") != context.user_id:
@@ -506,12 +598,62 @@ def download_conversation_media(
     conversations: dict[str, list[dict]],
     media: dict[str, dict],
     reporter: JobReporter | None,
-) -> dict[str, str]:
+) -> XMediaDownloadResult:
     wanted_media_keys = {key for items in conversations.values() for item in items for key in media_keys(item)}
+    preexisting = {
+        key
+        for key in wanted_media_keys
+        if key in media
+        and (media.get(key) or {}).get("type") == "photo"
+        and (media.get(key) or {}).get("url")
+        and photo_media_path(paths.media_dir, key, media[key]).exists()
+    }
     emit_checkpoint(reporter, "MEDIA_DOWNLOAD_START", photos=len(wanted_media_keys))
     media_paths = download_photos(media, paths.media_dir, wanted_media_keys)
-    emit_checkpoint(reporter, "MEDIA_DOWNLOAD_DONE", downloaded=len(media_paths), requested=len(wanted_media_keys))
-    return media_paths
+    downloaded_media_keys = set(media_paths) - preexisting
+    emit_checkpoint(
+        reporter,
+        "MEDIA_DOWNLOAD_DONE",
+        downloaded=len(downloaded_media_keys),
+        local=len(media_paths),
+        requested=len(wanted_media_keys),
+    )
+    return XMediaDownloadResult(media_paths, downloaded_media_keys, wanted_media_keys)
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def media_needs_description(media_key: str, media_path_text: str, descriptions_dir: Path) -> bool:
+    media_path = resolve_portable_path(media_path_text)
+    out_path = descriptions_dir / f"{media_key}.json"
+    if not media_path.exists():
+        return False
+    if not out_path.exists():
+        return True
+    try:
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+    except Exception:
+        return True
+    return data.get("file_sha256") != file_sha256(media_path) or not data.get("analysis")
+
+
+def description_candidates_for_media(media_paths: dict[str, str], descriptions_dir: Path) -> set[str]:
+    return {
+        key
+        for key, media_path in media_paths.items()
+        if media_needs_description(key, media_path, descriptions_dir)
+    }
+
+
+def media_conversation_map(conversations: dict[str, list[dict]]) -> dict[str, set[str]]:
+    mapping: dict[str, set[str]] = defaultdict(set)
+    for conversation_id, items in conversations.items():
+        for item in items:
+            for key in media_keys(item):
+                mapping[key].add(conversation_id)
+    return mapping
 
 
 def write_conversation_records(
@@ -523,9 +665,12 @@ def write_conversation_records(
     context: XCaptureContext,
     media_paths: dict[str, str],
     reporter: JobReporter | None,
-) -> tuple[list[dict[str, Any]], int]:
+) -> XRecordWriteResult:
     entries: list[dict[str, Any]] = []
     ignored_this_run = 0
+    changed_conversation_ids: set[str] = set()
+    cached_conversation_ids: set[str] = set()
+    ignored_conversation_ids: set[str] = set()
     emit_checkpoint(reporter, "THREAD_RECORD_WRITE_START", conversations=len(conversations), ai_enabled=False)
     for conversation_id, items in conversations.items():
         existing_record = find_cached_thread_record(paths.json_dir, conversation_id)
@@ -552,6 +697,7 @@ def write_conversation_records(
         reason = ignore_reason(root_tweet, items, thread_type, relevance_tickers, context)
         if reason:
             ignored_this_run += 1
+            ignored_conversation_ids.add(conversation_id)
             emit_checkpoint(reporter, "THREAD_IGNORED", conversation_id=conversation_id, reason=reason)
             ignored_data = {
                 "conversation_id": conversation_id,
@@ -584,7 +730,7 @@ def write_conversation_records(
                     existing_json_data,
                     reason,
                     context,
-                    remove_html=False,
+                    remove_html=True,
                 )
             else:
                 write_ignored_record(paths.root, conversation_id, reason, ignored_data, context)
@@ -624,6 +770,7 @@ def write_conversation_records(
                     tldr = cached_data.get("tldr", tldr)
                     analysis_metadata.update(analysis_field_payload(cached_data))
         if not is_cached:
+            changed_conversation_ids.add(conversation_id)
             cleanup_old_json_versions(paths.json_dir, conversation_id, json_path)
             json_path.write_text(
                 json.dumps(
@@ -660,6 +807,7 @@ def write_conversation_records(
                 encoding="utf-8",
             )
         if is_cached:
+            cached_conversation_ids.add(conversation_id)
             try:
                 captured_at = json.loads(json_path.read_text(encoding="utf-8")).get(
                     "captured_at", dt.datetime.now(dt.timezone.utc).isoformat()
@@ -702,7 +850,7 @@ def write_conversation_records(
             }
         )
     emit_checkpoint(reporter, "THREAD_RECORD_WRITE_DONE", records=len(entries), ignored=ignored_this_run, ai_enabled=False)
-    return entries, ignored_this_run
+    return XRecordWriteResult(entries, ignored_this_run, changed_conversation_ids, cached_conversation_ids, ignored_conversation_ids)
 
 
 def run_live_x_capture(
@@ -715,31 +863,50 @@ def run_live_x_capture(
     reporter: JobReporter | None = None,
 ) -> dict[str, Any]:
     state = initialize_capture_state(paths, env_path, token)
-    fetch_seed_context(state, options, context, reporter)
-    conversation_ids = discover_conversation_ids(state.tweets, options, context)
+    seed_ids = fetch_seed_context(state, options, context, reporter)
+    conversation_ids = discover_conversation_ids(state.tweets, options, context, seed_ids, state.cached_tweet_ids)
     emit_checkpoint(reporter, "THREAD_DISCOVERY_DONE", conversations=len(conversation_ids), cached=len(state.cached_conversation_ids))
     search_results = search_selected_conversations(paths, state, conversation_ids, options, reporter)
     conversations = assemble_conversations(state.tweets, conversation_ids, context)
-    media_paths = download_conversation_media(paths, conversations, state.media, reporter)
-    entries, ignored_this_run = write_conversation_records(
+    media_result = download_conversation_media(paths, conversations, state.media, reporter)
+    record_result = write_conversation_records(
         paths,
         state,
         conversations,
         search_results,
         options,
         context,
-        media_paths,
+        media_result.media_paths,
         reporter,
     )
+    storage = storage_paths_for_x_root(paths.root)
+    description_candidate_media_keys = description_candidates_for_media(media_result.media_paths, storage.x_descriptions)
+    media_conversation_ids = media_conversation_map(conversations)
     usage = write_usage_estimate(paths.root, run_id, state.client)
-    capture_manifest = write_capture_manifest(paths.root, run_id, paths.raw_dir, entries, media_paths, ignored_this_run)
+    capture_manifest = write_capture_manifest(
+        paths.root,
+        run_id,
+        paths.raw_dir,
+        record_result.entries,
+        conversation_ids,
+        state.cached_conversation_ids,
+        record_result,
+        media_result,
+        description_candidate_media_keys,
+        media_conversation_ids,
+        usage,
+        record_result.ignored,
+    )
     return {
-        "threads": len(entries),
-        "ignored": ignored_this_run,
+        "threads": len(record_result.entries),
+        "ignored": record_result.ignored,
         "raw_api_dir": portable_path(paths.raw_dir),
         "records_dir": portable_path(paths.json_dir),
         "media_dir": portable_path(paths.media_dir),
         "description_media_keys": capture_manifest["description_media_keys"],
+        "changed_conversation_ids": capture_manifest["changed_conversation_ids"],
+        "cached_conversation_ids": capture_manifest["cached_conversation_ids"],
+        "render_conversation_ids": capture_manifest["render_conversation_ids"],
         "api_calls": state.client.call_count,
         "unique_post_reads_estimate": usage["unique_post_ids_returned"],
         "estimated_x_cost_usd": usage["estimated_cost_usd"],

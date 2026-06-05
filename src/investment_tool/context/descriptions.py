@@ -28,7 +28,7 @@ from investment_tool.runtime.config import (
 )
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
-from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
+from investment_tool.runtime.reporting import estimate_openai_cost_usd, report_event, start_reporter
 
 
 PIPELINE_ID = "media_description"
@@ -63,6 +63,17 @@ def iter_media_paths(media_dir: Path) -> list[Path]:
         for path in media_dir.iterdir()
         if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
     )
+
+
+def media_paths_for_keys(media_dir: Path, wanted_keys: set[str]) -> list[Path]:
+    paths: list[Path] = []
+    for key in sorted(wanted_keys):
+        for suffix in sorted(SUPPORTED_SUFFIXES):
+            path = media_dir / f"{key}{suffix}"
+            if path.exists() and path.is_file():
+                paths.append(path)
+                break
+    return paths
 
 
 def image_data_url(path: Path) -> str:
@@ -164,10 +175,14 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
     schema = read_json(schema_path)
     media_dir = resolve_portable_path(args.media_dir) if args.media_dir else storage.x_media
     output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage.x_descriptions
-    paths = iter_media_paths(media_dir)
     if args.media_key:
         wanted = {key.strip() for key in args.media_key if key.strip()}
-        paths = [path for path in paths if media_key(path) in wanted]
+        paths = media_paths_for_keys(media_dir, wanted)
+        missing_keys = sorted(wanted - {media_key(path) for path in paths})
+        for key in missing_keys:
+            report_event("WARNING", "descriptions", reason="requested_media_missing", media_key=key)
+    else:
+        paths = iter_media_paths(media_dir)
     if args.limit:
         paths = paths[: args.limit]
     reporter = start_reporter(

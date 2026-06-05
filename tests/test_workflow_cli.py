@@ -142,6 +142,24 @@ class WorkflowCliTests(unittest.TestCase):
 
         self.assertNotIn("--incremental", argv)
 
+    def test_workflow_x_namespace_marks_update_as_incremental(self):
+        args = argparse.Namespace(
+            command="update",
+            feed_config="",
+            feed_id="",
+            timeline_pages=3,
+            conversation_pages=0,
+            max_threads=20,
+            conversation_id="",
+            force=False,
+            rebuild_staging_dir="",
+            replace_generated_json=False,
+        )
+
+        namespace = workflow_run.workflow_x_namespace(args, "config/feeds/x_accounts.json")
+
+        self.assertTrue(namespace.incremental)
+
     def test_update_descriptions_scope_uses_latest_x_capture_media_keys(self):
         old_data_root = os.environ.get("INVESTMENT_TOOL_DATA_DIR")
         with tempfile.TemporaryDirectory() as tmp:
@@ -149,7 +167,7 @@ class WorkflowCliTests(unittest.TestCase):
             usage = Path(tmp) / "feeds" / "x" / "usage"
             usage.mkdir(parents=True)
             (usage / "latest_capture_manifest.json").write_text(
-                json.dumps({"description_media_keys": ["3_b", "3_a", "3_a"]}),
+                json.dumps({"description_candidate_media_keys": ["3_b", "3_a", "3_a"], "description_media_keys": ["old"]}),
                 encoding="utf-8",
             )
             stage = WorkflowStage(
@@ -181,10 +199,37 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(calls[0].count("--media-key"), 2)
         self.assertLess(calls[0].index("3_a"), calls[0].index("3_b"))
 
+    def test_move_screenshot_inputs_removes_processed_files_from_inbox(self):
+        old_data_root = os.environ.get("INVESTMENT_TOOL_DATA_DIR")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["INVESTMENT_TOOL_DATA_DIR"] = tmp
+            inbox = Path(tmp) / "feeds" / "screenshots" / "inbox"
+            inbox.mkdir(parents=True)
+            shot = inbox / "one.png"
+            shot.write_bytes(b"image")
+            try:
+                dest_dir = workflow_run.move_screenshot_inputs([shot], "processed")
+                moved = (dest_dir / "one.png").exists()
+                original_exists = shot.exists()
+            finally:
+                if old_data_root is None:
+                    os.environ.pop("INVESTMENT_TOOL_DATA_DIR", None)
+                else:
+                    os.environ["INVESTMENT_TOOL_DATA_DIR"] = old_data_root
+
+            self.assertFalse(original_exists)
+            self.assertTrue(moved)
+
     def test_update_descriptions_skips_when_latest_capture_has_no_media(self):
         old_data_root = os.environ.get("INVESTMENT_TOOL_DATA_DIR")
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["INVESTMENT_TOOL_DATA_DIR"] = tmp
+            manifest_dir = Path(tmp) / "context" / "descriptions" / "x"
+            manifest_dir.mkdir(parents=True)
+            (manifest_dir / "manifest.json").write_text(
+                json.dumps({"seen": 9, "analyzed": 9, "skipped": 0, "failed": 0, "estimated_openai_cost_usd": 1.23}),
+                encoding="utf-8",
+            )
             stage = WorkflowStage(
                 stage="descriptions",
                 module_id="descriptions",
@@ -202,6 +247,7 @@ class WorkflowCliTests(unittest.TestCase):
                 with patch("investment_tool.context.descriptions.main") as mocked:
                     with contextlib.redirect_stdout(stdout):
                         code = workflow_run.run_descriptions_stage(stage, args)
+                summary = workflow_run.stage_summary("descriptions")
             finally:
                 if old_data_root is None:
                     os.environ.pop("INVESTMENT_TOOL_DATA_DIR", None)
@@ -211,6 +257,8 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertFalse(mocked.called)
         self.assertIn("DESCRIPTIONS_SKIPPED=no_media_keys_from_latest_capture", stdout.getvalue())
+        self.assertIn("seen=0", summary)
+        self.assertIn("reason=no_media_keys_from_latest_capture", summary)
 
 
 if __name__ == "__main__":

@@ -3,13 +3,37 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from investment_tool.feeds.x.store import (
     cleanup_old_json_versions,
     cleanup_old_render_versions,
     find_cached_thread_record,
     load_cached_threads,
+    rerender_cached_threads,
 )
+from investment_tool.feeds.x.context import XCaptureContext
+from investment_tool.runtime.config import FeedProfile
+
+
+def capture_context() -> XCaptureContext:
+    return XCaptureContext(
+        profile=FeedProfile(
+            feed_id="test_feed",
+            platform="x",
+            module="x-capture",
+            username="source",
+            user_id="feed-user",
+            display_name="Source",
+            data_root="",
+            alternate_usernames=(),
+            thread_rules_path="",
+            media_rules_path="",
+            user_specifics={},
+        ),
+        thread_rules={},
+        media_rules={},
+    )
 
 
 class XStoreTests(unittest.TestCase):
@@ -90,6 +114,49 @@ class XStoreTests(unittest.TestCase):
         self.assertIn("reason=json_read_failed", output)
         self.assertIn("action=find_cached_thread_record", output)
         self.assertIn("bad__123.json", output)
+
+    def test_rerender_cached_threads_can_limit_to_selected_conversations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = root / "records"
+            html = root / "html"
+            presentation = root / "presentation"
+            records.mkdir()
+            html.mkdir()
+            (presentation / "indexes").mkdir(parents=True)
+            for conv_id in ("c1", "c2"):
+                filename = f"20260604__UNKNOWN__title__{conv_id}.html"
+                (html / filename).write_text("<html></html>", encoding="utf-8")
+                (records / f"20260604__UNKNOWN__title__{conv_id}.json").write_text(
+                    (
+                        "{"
+                        f'"conversation_id": "{conv_id}",'
+                        f'"canonical_filename": "{filename}",'
+                        '"title": "Title",'
+                        '"type": "feed_post",'
+                        '"primary_label": "UNKNOWN",'
+                        '"tickers": [],'
+                        '"tags": [],'
+                        f'"tweets": [{{"id": "{conv_id}", "author_id": "feed-user", "conversation_id": "{conv_id}", "created_at": "2026-06-04T00:00:00Z", "text": "hello"}}],'
+                        '"users": {},'
+                        '"media": {},'
+                        '"media_paths": {}'
+                        "}"
+                    ),
+                    encoding="utf-8",
+                )
+            rendered = []
+
+            def fake_render(path, *args, **kwargs):
+                rendered.append(path.name)
+                path.write_text("<html>rendered</html>", encoding="utf-8")
+
+            with patch("investment_tool.feeds.x.store.render_thread_html", side_effect=fake_render):
+                entries = rerender_cached_threads(root, records, html, None, capture_context(), presentation, conversation_ids={"c1"})
+
+        self.assertEqual(len(rendered), 1)
+        self.assertIn("__c1.html", rendered[0])
+        self.assertEqual({entry["conversation_id"] for entry in entries}, {"c1", "c2"})
 
 
 if __name__ == "__main__":

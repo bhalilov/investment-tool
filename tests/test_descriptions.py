@@ -27,6 +27,16 @@ class DescriptionsTests(unittest.TestCase):
 
         self.assertEqual(media_analysis.media_output_path(out, path), out / "3_abc.json")
 
+    def test_media_paths_for_keys_resolves_directly_without_full_scan_order_noise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "wanted.png").write_bytes(b"png")
+            (root / "other.jpg").write_bytes(b"jpg")
+
+            paths = media_analysis.media_paths_for_keys(root, {"wanted", "missing"})
+
+        self.assertEqual([path.name for path in paths], ["wanted.png"])
+
     def test_should_skip_when_existing_hash_matches_and_has_analysis(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

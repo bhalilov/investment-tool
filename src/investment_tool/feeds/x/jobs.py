@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import sys
 from pathlib import Path
@@ -48,6 +49,7 @@ def add_x_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-threads", type=int, default=20)
     parser.add_argument("--conversation-id", default="")
     parser.add_argument("--force", action="store_true", help="Re-fetch and overwrite already-cached threads")
+    parser.add_argument("--incremental", action="store_true", help="Use scheduled-run incremental scope when supported.")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -92,6 +94,58 @@ def load_x_context_from_args(args: argparse.Namespace) -> XCaptureContext:
 def print_key_values(values: dict[str, object]) -> None:
     for key, value in values.items():
         print(f"{key.upper()}={value}")
+
+
+def latest_capture_manifest(root: Path) -> dict[str, object]:
+    path = root / "usage" / "latest_capture_manifest.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def incremental_render_ids(root: Path) -> set[str]:
+    manifest = latest_capture_manifest(root)
+    raw_ids = (
+        manifest.get("render_conversation_ids")
+        or manifest.get("changed_conversation_ids")
+        or []
+    )
+    if not isinstance(raw_ids, list):
+        return set()
+    return {str(item).strip() for item in raw_ids if str(item).strip()}
+
+
+def write_render_manifest(
+    root: Path,
+    run_id: str,
+    scope: str,
+    requested_conversation_ids: set[str],
+    rendered_threads: int,
+    indexed_threads: int,
+    ignored: int,
+    index_path: Path,
+) -> Path:
+    usage_dir = root / "usage"
+    usage_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "run_id": run_id,
+        "rendered_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "scope": scope,
+        "requested_conversation_ids": sorted(requested_conversation_ids),
+        "rendered_threads": rendered_threads,
+        "indexed_threads": indexed_threads,
+        "ignored": ignored,
+        "index": portable_path(index_path),
+    }
+    path = usage_dir / "latest_render_manifest.json"
+    path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    with (usage_dir / "render_runs.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(manifest, ensure_ascii=False) + "\n")
+    return path
 
 
 def run_x_action(args: argparse.Namespace, action: str) -> int:
@@ -161,23 +215,43 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
         return 0
 
     if action == "x-rerender":
-        ignored = apply_cached_relevance_gate(paths.root, paths.json_dir, paths.threads_dir, context)
-        entries = rerender_cached_threads(
-            paths.root,
-            paths.json_dir,
-            paths.threads_dir,
-            args.conversation_id,
-            context,
-            paths.presentation_root,
-        )
+        incremental = bool(getattr(args, "incremental", False)) and not bool(getattr(args, "force", False))
+        render_ids = incremental_render_ids(paths.root) if incremental else set()
+        ignored = 0 if incremental else apply_cached_relevance_gate(paths.root, paths.json_dir, paths.threads_dir, context)
+        if incremental and not render_ids and not args.conversation_id:
+            entries = entries_from_cached_json(paths.json_dir, paths.threads_dir, context)
+        else:
+            entries = rerender_cached_threads(
+                paths.root,
+                paths.json_dir,
+                paths.threads_dir,
+                args.conversation_id,
+                context,
+                paths.presentation_root,
+                conversation_ids=render_ids if incremental else None,
+            )
         render_all_indexes(paths.presentation_root, entries, load_owned_tickers())
         index_path = paths.presentation_root / "indexes" / "index.html"
+        scope = "incremental" if incremental else "full"
+        rendered_threads = len(render_ids) if incremental else len(entries)
+        manifest_path = write_render_manifest(paths.root, run_id, scope, render_ids, rendered_threads, len(entries), ignored, index_path)
         print(f"INDEX={portable_path(index_path)}")
         print("RERENDER_ONLY=true")
+        print(f"RENDER_SCOPE={scope}")
+        print(f"RENDERED_THREADS={rendered_threads}")
         print(f"THREADS={len(entries)}")
         print(f"IGNORED={ignored}")
         print("API_CALLS=0")
-        reporter.done(mode="rerender", threads=len(entries), ignored=ignored, api_calls=0, index=portable_path(index_path))
+        reporter.done(
+            mode="rerender",
+            scope=scope,
+            rendered_threads=rendered_threads,
+            threads=len(entries),
+            ignored=ignored,
+            api_calls=0,
+            index=portable_path(index_path),
+            manifest=portable_path(manifest_path),
+        )
         return 0
 
     token = os.environ.get("X_USER_ACCESS_TOKEN", "").strip()
@@ -198,6 +272,7 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
         max_threads=args.max_threads,
         conversation_id=args.conversation_id or "",
         force=args.force,
+        incremental=bool(getattr(args, "incremental", False)),
     )
     result = run_live_x_capture(paths, run_id, env_path, token, options, context, reporter)
     print(f"THREADS={result['threads']}")
@@ -205,6 +280,9 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
     print(f"RECORDS_DIR={result['records_dir']}")
     print(f"MEDIA_DIR={result['media_dir']}")
     print(f"DESCRIPTION_MEDIA_KEYS={len(result['description_media_keys'])}")
+    print(f"CHANGED_CONVERSATIONS={len(result['changed_conversation_ids'])}")
+    print(f"CACHED_CONVERSATIONS={len(result['cached_conversation_ids'])}")
+    print(f"RENDER_CONVERSATIONS={len(result['render_conversation_ids'])}")
     print(f"API_CALLS={result['api_calls']}")
     print(f"UNIQUE_POST_READS_ESTIMATE={result['unique_post_reads_estimate']}")
     print(f"ESTIMATED_X_COST_USD={result['estimated_x_cost_usd']}")
@@ -217,6 +295,9 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
         estimated_x_cost_usd=result["estimated_x_cost_usd"],
         ai_in_capture=False,
         description_media_keys=len(result["description_media_keys"]),
+        changed_conversations=len(result["changed_conversation_ids"]),
+        cached_conversations=len(result["cached_conversation_ids"]),
+        render_conversations=len(result["render_conversation_ids"]),
         records_dir=result["records_dir"],
     )
     return 0

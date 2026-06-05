@@ -7,10 +7,45 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
-from investment_tool.feeds.x.api import XClient
+from investment_tool.feeds.x.api import XClient, fetch_timeline
 
 
 class XApiTests(unittest.TestCase):
+    def test_fetch_timeline_stops_after_known_streak(self):
+        class FakeClient:
+            def __init__(self):
+                self.calls = 0
+
+            def get(self, path, params, label):
+                self.calls += 1
+                return {
+                    "data": [
+                        {"id": "new", "author_id": "feed", "conversation_id": "new"},
+                        {"id": "known-1", "author_id": "feed", "conversation_id": "old"},
+                        {"id": "known-2", "author_id": "feed", "conversation_id": "old"},
+                        {"id": "too-old", "author_id": "feed", "conversation_id": "older"},
+                    ],
+                    "meta": {"next_token": "next"},
+                }
+
+        tweets = {}
+        client = FakeClient()
+
+        seeds = fetch_timeline(
+            client,
+            "feed-user",
+            3,
+            tweets,
+            {},
+            {},
+            known_tweet_ids={"known-1", "known-2"},
+            stop_after_known_streak=2,
+        )
+
+        self.assertEqual(seeds, ["new", "known-1"])
+        self.assertEqual(client.calls, 1)
+        self.assertIn("too-old", tweets)
+
     def test_rate_limit_retry_is_capped_and_reported_to_stdout(self):
         def rate_limited(request, timeout=30):
             raise urllib.error.HTTPError(

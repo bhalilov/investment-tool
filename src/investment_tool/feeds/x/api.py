@@ -332,9 +332,14 @@ def fetch_timeline(
     tweets: dict[str, dict],
     users: dict[str, dict],
     media: dict[str, dict],
+    known_tweet_ids: set[str] | None = None,
+    stop_after_known_streak: int = 0,
 ) -> list[str]:
     seed_ids: list[str] = []
     pagination_token: str | None = None
+    known_tweet_ids = known_tweet_ids or set()
+    known_streak = 0
+    stop = False
     for page in range(pages):
         params = tweet_params(max_results=100)
         if pagination_token:
@@ -342,7 +347,17 @@ def fetch_timeline(
         response = client.get(f"/users/{feed_user_id}/tweets", params, f"feed_timeline_page_{page + 1}")
         merge_response(response, tweets, users, media)
         for item in response.get("data") or []:
-            seed_ids.append(item["id"])
+            tweet_id = item["id"]
+            if tweet_id in known_tweet_ids:
+                known_streak += 1
+            else:
+                known_streak = 0
+            if stop_after_known_streak and known_streak >= stop_after_known_streak:
+                stop = True
+                break
+            seed_ids.append(tweet_id)
+        if stop:
+            break
         pagination_token = (response.get("meta") or {}).get("next_token")
         if not pagination_token:
             break
@@ -391,6 +406,12 @@ def search_conversation(
     )
 
 
+def photo_media_path(media_dir: Path, key: str, item: dict[str, Any]) -> Path:
+    url = item["url"]
+    suffix = Path(urllib.parse.urlparse(url).path).suffix or ".jpg"
+    return media_dir / f"{key}{suffix}"
+
+
 def download_photos(media: dict[str, dict], media_dir: Path, wanted_keys: set[str]) -> dict[str, str]:
     paths: dict[str, str] = {}
     for key, item in media.items():
@@ -399,8 +420,7 @@ def download_photos(media: dict[str, dict], media_dir: Path, wanted_keys: set[st
         if item.get("type") != "photo" or not item.get("url"):
             continue
         url = item["url"]
-        suffix = Path(urllib.parse.urlparse(url).path).suffix or ".jpg"
-        path = media_dir / f"{key}{suffix}"
+        path = photo_media_path(media_dir, key, item)
         if not path.exists():
             req = urllib.request.Request(url, headers={"User-Agent": "investment-tool/0.1"})
             try:
