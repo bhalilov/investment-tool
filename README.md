@@ -1,55 +1,127 @@
 # investment-tool
 
-Local monitoring and evidence-capture tool for configurable investment research
-feeds.
+Local investment research pipeline for capturing configurable feeds, preserving
+the raw evidence, enriching it with market/context data, and preparing it for
+later AI analysis and retrieval.
 
-## Current Layout
+This repo is the code and spec home. Runtime data lives outside Git.
 
-- Code: this repo checkout, referred to as `<repo>`
-- Runtime data: `<data>`, resolved from `--data-dir`, `INVESTMENT_TOOL_DATA_DIR`,
-  `INVESTMENT_TOOL_HOME/data`, or repo-local `data/`
-- Main X index: `<data>/presentation/indexes/index.html`
+## What This Tool Does
 
-Private data, raw API responses, screenshots, reports, logs, runtime data, and
-secrets must stay out of Git.
+The tool is being built to monitor investment-research feeds over time and keep
+the evidence usable for later analysis.
 
-## Source-Of-Truth Specs
+Current implemented feed families:
 
-Read these before changing workflow or AI/vector behavior:
+- X threads from configured accounts.
+- Saved article archives.
+- Manual screenshot thread bundles.
 
-- `docs/pipeline-orchestrator-plan.md` - approved non-AI workflow/orchestrator design.
-- `docs/ai-vector-pass-design.md` - postponed thread AI/vector design decisions.
-- `docs/code-organization-spec.md` - locked package hierarchy and naming.
-- `docs/storage-layout.md` - code/data storage map.
+Current supporting context:
 
-## Architecture Rules
+- USD-normalized daily market prices.
+- Image/media descriptions as a separate context stage.
+- Rendered local HTML pages and indexes for browsing/QA.
 
-- Work from the code repo, not the runtime data folder.
-- Product logic lives in `src/investment_tool/`.
-- `scripts/` is only for thin compatibility launchers or disposable probes.
-- Scheduled runs, manual runs, rebuilds, and production should use the same
-  package logic with different flags.
-- When a prototype becomes useful, move the logic into `src/investment_tool/`
-  before relying on it.
-- Feed accounts, feed-specific interpretation notes, reconstruction rules,
-  media rules, model choices, and prompts live under `config/` and `prompts/`.
-- Never print or commit private credentials from `.env`.
+Postponed but designed separately:
 
-## Approved Workflow Interface
+- Expensive thread AI pass 1 and pass 2.
+- Vector push/search memory.
+- Portfolio/timeline reconstruction.
+- UI-driven manual correction loops.
 
-The public workflow interface is:
+## Core Architecture
+
+The code is organized around a simple rule: folder context carries meaning.
+That means we use `feeds/x/api.py`, not names like `x_x_api.py`, and runtime
+data uses `feeds/x/records`, not repeated old names like `x_threads/thread_json`.
+
+Main package layout:
+
+| Folder | Purpose |
+| --- | --- |
+| `cli/` | Public command entrypoints |
+| `workflow/` | Top-level orchestration, checks, locks, logs, storage rename |
+| `runtime/` | Env loading, config loading, path resolution, reporting |
+| `feeds/` | Feed-specific capture/ingest code |
+| `context/` | Supporting context such as prices and image descriptions |
+| `analysis/` | Shared OpenAI helpers and future AI passes |
+| `retrieval/` | Legacy evidence/vector code and future retrieval memory |
+| `presentation/` | HTML thread pages and indexes |
+| `rules/` | Feed-neutral parsing/filtering rules |
+| `records/` | Canonical record shapes, as they become explicit |
+
+Important design boundary:
+
+- `workflow` coordinates.
+- `feeds/*` capture or ingest feed data.
+- `context/*` creates supporting data.
+- `presentation/*` renders human-readable views.
+- `analysis/*` and `retrieval/*` stay separate from capture.
+
+## Runtime Data
+
+Runtime data is referred to as `<data>`.
+
+Resolution order:
+
+1. Explicit `--data-dir`
+2. `INVESTMENT_TOOL_DATA_DIR`
+3. `INVESTMENT_TOOL_HOME/data`
+4. Repo-local `data/`
+
+Canonical runtime layout:
+
+```text
+<data>/
+├── feeds/
+│   ├── x/{raw,records,media,ignored,usage}
+│   ├── articles/{archive,records,manifest.json}
+│   └── screenshots/{inbox,bundles,media,records}
+├── context/
+│   ├── prices/{daily,hourly,intraday,manifest.json}
+│   └── descriptions/{x,screenshots}
+├── presentation/{threads/x,indexes}
+├── retrieval/
+└── workflow/{logs,locks}
+```
+
+Runtime folders include plain `README.md` descriptions so the data remains
+scanable even without the code open.
+
+Never commit runtime data, raw API responses, screenshots, logs, reports, or
+secrets.
+
+## Workflow Model
+
+The public interface is `investment-tool workflow`.
+
+Normal incremental aliases:
 
 ```bash
 investment-tool workflow update
 investment-tool workflow sync
 investment-tool workflow refresh
+```
 
+Manual rebuilds:
+
+```bash
 investment-tool workflow rebuild --stage prices
+investment-tool workflow rebuild --stage x-raw --stage render
 investment-tool workflow rebuild --all
+```
 
+Read-only checks:
+
+```bash
 investment-tool workflow check
 investment-tool workflow doctor
+```
 
+Storage maintenance:
+
+```bash
 investment-tool storage rename --dry-run
 investment-tool storage rename --apply
 investment-tool storage rename --verify-only
@@ -57,31 +129,91 @@ investment-tool storage clean-old --dry-run
 investment-tool storage clean-old --apply
 ```
 
-`update`, `sync`, and `refresh` are aliases for the normal incremental workflow.
-`check` and `doctor` are read-only inspection aliases in v1. `rebuild` requires
-one or more `--stage` values or explicit `--all`.
+V1 scheduled update stage order:
 
-`storage rename` is a rename/move cleanup for runtime data. It also writes
-plain `README.md` descriptions into the main runtime folders so the data is
-scanable without reading the code. After verification, `storage clean-old`
-deletes obsolete old folders and old staging files.
+1. `x-capture`
+2. `screenshots`
+3. `prices`
+4. `descriptions`
+5. `render`
 
-Direct stage commands still exist as compatibility launchers, but new
-production work should start from the `workflow` command group.
+`articles` and `x-raw` are explicit/manual stages in v1, not part of the normal
+scheduled update.
 
-## Important Boundaries
+## Current Rules
 
-- X capture never runs thread AI.
-- Phase 1 thread AI intentionally has no vector search.
-- Vector push/search behavior is postponed until the AI/vector design is
-  reviewed again.
-- Rendering/indexing should be split from capture in the new workflow.
-- HC/Ghost ingest is explicit/manual in workflow v1, not part of scheduled
-  update.
+Project rules:
 
-## Verification Before Pushing
+- Work from the repo, not from the runtime data folder.
+- Product logic belongs under `src/investment_tool/`.
+- `scripts/` is only for thin compatibility launchers or disposable probes.
+- Useful prototype logic must move into `src/investment_tool/` before it becomes
+  relied upon.
+- Scheduled runs, manual runs, rebuilds, and production should use the same
+  package logic with different flags.
+- Configurable feed accounts, feed-specific interpretation notes, reconstruction
+  rules, media rules, model choices, and prompts belong under `config/` and
+  `prompts/`.
+- Paths in docs/config/code should be portable: use `<repo>`, `<data>`, env
+  variables, or relative project paths, not user-specific absolute paths.
+
+Capture and analysis rules:
+
+- X capture saves raw API, clean records, and photo media only.
+- X capture does not run thread AI.
+- X capture does not push vectors.
+- Videos and animated GIFs are skipped as media-analysis inputs and represented
+  with placeholders/tags.
+- HTML/index rendering is a separate `render` stage.
+- Phase 1 thread AI has no vector search.
+- Phase 2 retrieval/vector behavior is postponed until the AI/vector spec is
+  finalized.
+- Existing legacy retrieval code is quarantined under `retrieval/legacy.py`.
+
+Git rules:
+
+- Major architecture changes and bug fixes should be committed on a branch.
+- Commit messages should describe intent, not just file movement.
+- Runtime data and `.env` stay out of Git.
+- Before pushing, run compile/tests and relevant workflow checks.
+
+## Important Specs
+
+The README is the orientation layer. Detailed implementation decisions live in
+docs and should be treated as the source of truth when changing that area.
+
+| Spec | Use it for |
+| --- | --- |
+| `docs/pipeline-orchestrator-plan.md` | Workflow commands, stage order, logs, locks, scheduler model |
+| `docs/ai-vector-pass-design.md` | Postponed thread AI/vector design, pass 1/pass 2 boundaries |
+| `docs/code-organization-spec.md` | Package hierarchy and naming rules |
+| `docs/storage-layout.md` | Runtime data layout and folder ownership |
+| `docs/feed-record-spec.md` | Stored feed record shapes |
+| `docs/x-reconstruction-spec.md` | X raw API to clean thread reconstruction |
+| `docs/media-handling-spec.md` | Media ownership, skipped videos/GIFs, descriptions |
+| `docs/market-data-spec.md` | Price universe and market-data behavior |
+| `docs/presentation-spec.md` | HTML thread pages and indexes |
+| `docs/run-reporting-spec.md` | Job status/reporting conventions |
+| `docs/article-feed-spec.md` | Saved article archive ingest |
+| `docs/screenshot-feed-spec.md` | Manual screenshot bundles and reconstruction |
+| `docs/legacy-retrieval-note.md` | Quarantined legacy vector/evidence behavior |
+
+## Verification
+
+Run these before pushing code changes:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
 python3 -m py_compile src/investment_tool/*.py scripts/*.py tests/*.py
+python3 -m compileall -q src scripts tests
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+PYTHONPATH=src python3 -m investment_tool.cli.main workflow check
 ```
+
+For storage/path changes, also run:
+
+```bash
+PYTHONPATH=src python3 -m investment_tool.cli.main storage rename --verify-only
+```
+
+No paid AI calls, X API calls, market data calls, or vector uploads should run
+during normal documentation/code-structure verification.
