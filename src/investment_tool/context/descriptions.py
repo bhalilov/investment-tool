@@ -9,21 +9,22 @@ import datetime as dt
 import hashlib
 import json
 import mimetypes
-import os
 from pathlib import Path
 from typing import Any, Sequence
 
 from investment_tool.analysis.openai import call_responses_json
 from investment_tool.runtime.config import (
+    AIModelConfig,
     DEFAULT_X_MODULE_ID,
     FeedProfile,
+    ai_api_key,
     default_feed_config,
     feed_identity,
     load_pipeline_config,
     load_prompt,
     load_x_feed_profile,
     read_json,
-    resolve_ai_model,
+    resolve_ai_model_config,
 )
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
@@ -102,17 +103,17 @@ def build_media_prompt(path: Path, prompt_text: str) -> str:
 
 def analyze_media_with_openai(
     path: Path,
-    model: str,
+    model_config: AIModelConfig,
     prompt_text: str,
     schema: dict[str, Any],
     max_output_tokens: int,
 ) -> dict[str, Any] | None:
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    api_key = ai_api_key(model_config)
     if not api_key:
         return None
     analysis, _ = call_responses_json(
         api_key=api_key,
-        model=model,
+        model=model_config.model,
         system_prompt=(
             "You perform neutral OCR and visual description for investment screenshots. "
             "Never infer trading action or feed-account intent. Output valid JSON only."
@@ -125,6 +126,7 @@ def analyze_media_with_openai(
         schema=schema,
         max_output_tokens=max_output_tokens,
         timeout=90,
+        api_base=model_config.api_base,
     )
     return analysis
 
@@ -153,7 +155,8 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
     configure_feed(load_x_feed_profile(args.feed_config, args.feed_id))
     storage = storage_paths()
     pipeline = load_pipeline_config(PIPELINE_ID)
-    model = resolve_ai_model(PIPELINE_ID, args.model, ("OPENAI_MEDIA_MODEL",))
+    model_config = resolve_ai_model_config(PIPELINE_ID, args.model)
+    model = model_config.model
     prompt_path = args.prompt or str(pipeline["prompt"])
     schema_path = args.schema or str(pipeline["schema"])
     max_output_tokens = int(pipeline["max_output_tokens"])
@@ -180,6 +183,9 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
         prompt_sha256=prompt["sha256"],
         schema=schema_path,
         pipeline=PIPELINE_ID,
+        provider=model_config.provider,
+        api_base=model_config.api_base,
+        api_key_env=model_config.api_key_env,
     )
     stats = {
         "seen": 0,
@@ -204,10 +210,10 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
                 stats["skipped"] += 1
                 continue
             reporter.emit("WAITING", reason="openai_media_analysis", path=path.name, timeout_seconds=90, model=model)
-            analysis = analyze_media_with_openai(path, model, prompt["text"], schema, max_output_tokens)
+            analysis = analyze_media_with_openai(path, model_config, prompt["text"], schema, max_output_tokens)
             if not analysis:
                 stats["failed"] += 1
-                reporter.emit("ERROR", path=path.name, reason="missing_openai_api_key_or_empty_analysis")
+                reporter.emit("ERROR", path=path.name, reason="missing_api_key_or_empty_analysis", api_key_env=model_config.api_key_env)
                 continue
             analysis["input_fingerprint"] = media_fingerprint(path)
             stats["analyzed"] += 1
@@ -226,6 +232,10 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
         "media_dir": portable_path(media_dir),
         "output_dir": portable_path(output_dir),
         "model": model,
+        "model_profile": model_config.model_profile,
+        "provider": model_config.provider,
+        "api_base": model_config.api_base,
+        "api_key_env": model_config.api_key_env,
         "prompt_path": prompt["path"],
         "prompt_sha256": prompt["sha256"],
         "schema": schema_path,

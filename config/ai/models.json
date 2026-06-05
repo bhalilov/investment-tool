@@ -1,6 +1,8 @@
 {
   "version": 1,
   "provider": "openai",
+  "api_base": "https://api.openai.com/v1",
+  "api_key_env": "OPENAI_API_KEY",
   "model_profiles": {
     "premium_reasoning": {
       "model": "gpt-5.5",

@@ -8,7 +8,6 @@ import datetime as dt
 import hashlib
 import json
 import mimetypes
-import os
 import re
 import shutil
 import sys
@@ -21,15 +20,17 @@ from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_re
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.config import (
+    AIModelConfig,
     DEFAULT_X_MODULE_ID,
     FeedProfile,
+    ai_api_key,
     default_feed_config,
     feed_identity,
     feed_label,
     load_pipeline_config,
     load_prompt,
     load_x_feed_profile,
-    resolve_ai_model,
+    resolve_ai_model_config,
 )
 
 
@@ -403,11 +404,11 @@ def build_reconstruction_prompt(record: dict[str, Any]) -> str:
 
 def analyze_bundle_with_openai(
     record: dict[str, Any],
-    model: str,
+    model_config: AIModelConfig,
     system_prompt: str,
     max_output_tokens: int,
 ) -> dict[str, Any] | None:
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    api_key = ai_api_key(model_config)
     if not api_key:
         return None
     content: list[dict[str, Any]] = [{"type": "input_text", "text": build_reconstruction_prompt(record)}]
@@ -421,13 +422,14 @@ def analyze_bundle_with_openai(
         content.append({"type": "input_image", "image_url": image_data_url(resolve_portable_path(screenshot["imported_path"]))})
     reconstruction, _ = call_responses_json(
         api_key=api_key,
-        model=model,
+        model=model_config.model,
         system_prompt=system_prompt,
         user_content=content,
         schema_name="manual_x_thread_reconstruction",
         schema=reconstruction_schema(),
         max_output_tokens=max_output_tokens,
         timeout=180,
+        api_base=model_config.api_base,
     )
     return reconstruction
 
@@ -439,7 +441,8 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
     output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage_paths().screenshots_root
     bundle_id = slugify(args.bundle_id) if args.bundle_id else bundle_id_for(input_paths, args.bundle_name)
     pipeline = load_pipeline_config(PIPELINE_ID)
-    model = resolve_ai_model(PIPELINE_ID, args.model, ("OPENAI_MANUAL_THREAD_MODEL",))
+    model_config = resolve_ai_model_config(PIPELINE_ID, args.model)
+    model = model_config.model
     system_prompt = load_prompt(pipeline["system_prompt"])["text"]
     max_output_tokens = int(pipeline["max_output_tokens"])
     reporter = start_reporter(
@@ -452,6 +455,9 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
         bundle_id=bundle_id,
         analyze=bool(args.analyze),
         model=model if args.analyze else "",
+        provider=model_config.provider if args.analyze else "",
+        api_base=model_config.api_base if args.analyze else "",
+        api_key_env=model_config.api_key_env if args.analyze else "",
     )
     record = build_bundle_record(
         bundle_id=bundle_id,
@@ -471,9 +477,9 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
     path = write_bundle(record, input_paths, output_dir, force=args.force)
     reporter.checkpoint(processed=len(input_paths), force=True, bundle_path=portable_path(path))
     if args.analyze:
-        reconstruction = analyze_bundle_with_openai(record, model, system_prompt, max_output_tokens)
+        reconstruction = analyze_bundle_with_openai(record, model_config, system_prompt, max_output_tokens)
         if not reconstruction:
-            reporter.fail(bundle_path=portable_path(path), reason="OPENAI_API_KEY is not configured")
+            reporter.fail(bundle_path=portable_path(path), reason="api_key_env is not configured", api_key_env=model_config.api_key_env)
             return 1
         record["analysis_stage"] = "manual_reconstruction_complete"
         record["status"] = "reconstructed"
@@ -482,6 +488,10 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
         record["reconstructed_threads"] = reconstruction.get("reconstructed_threads") or []
         record["reconstructed_at"] = iso_now()
         record["model"] = model
+        record["model_profile"] = model_config.model_profile
+        record["provider"] = model_config.provider
+        record["api_base"] = model_config.api_base
+        record["api_key_env"] = model_config.api_key_env
         input_tokens = int(reconstruction.get("_input_tokens") or 0)
         output_tokens = int(reconstruction.get("_output_tokens") or 0)
         record["estimated_openai_cost_usd"] = estimate_openai_cost_usd(model, input_tokens, output_tokens)

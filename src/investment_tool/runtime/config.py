@@ -14,6 +14,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_FEED_MODULES_CONFIG = "config/feed_modules.json"
 DEFAULT_X_MODULE_ID = "x-capture"
 DEFAULT_ARTICLES_MODULE_ID = "articles"
+DEFAULT_AI_PROVIDER = "openai"
+DEFAULT_AI_API_BASE = "https://api.openai.com/v1"
+DEFAULT_AI_API_KEY_ENV = "OPENAI_API_KEY"
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,16 @@ class WorkflowStage:
     runner: str
     action: str
     argv: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AIModelConfig:
+    pipeline_id: str
+    model_profile: str
+    model: str
+    provider: str
+    api_base: str
+    api_key_env: str
 
 
 def project_path(path_text: str | Path) -> Path:
@@ -163,26 +176,47 @@ def load_pipeline_config(pipeline_id: str, path: str | Path = "config/ai/pipelin
     raise ValueError(f"Pipeline config not found: {pipeline_id}")
 
 
-def model_for_profile(profile_id: str, path: str | Path = "config/ai/models.json") -> str:
+def model_profile_config(profile_id: str, path: str | Path = "config/ai/models.json") -> dict[str, Any]:
     registry = load_model_registry(path)
     profile = (registry.get("model_profiles") or {}).get(profile_id)
     if not profile or not profile.get("model"):
         raise ValueError(f"Model profile not found or missing model: {profile_id}")
-    return str(profile["model"])
+    return dict(profile)
 
 
-def resolve_ai_model(pipeline_id: str, explicit_model: str = "", env_vars: tuple[str, ...] = ()) -> str:
-    if explicit_model:
-        return explicit_model
-    for env_var in env_vars:
-        value = os.environ.get(env_var, "").strip()
-        if value:
-            return value
-    pipeline = load_pipeline_config(pipeline_id)
+def model_for_profile(profile_id: str, path: str | Path = "config/ai/models.json") -> str:
+    return str(model_profile_config(profile_id, path)["model"])
+
+
+def resolve_ai_model_config(
+    pipeline_id: str,
+    explicit_model: str = "",
+    *,
+    model_registry_path: str | Path = "config/ai/models.json",
+    pipeline_registry_path: str | Path = "config/ai/pipelines.json",
+) -> AIModelConfig:
+    registry = load_model_registry(model_registry_path)
+    pipeline = load_pipeline_config(pipeline_id, pipeline_registry_path)
     profile_id = str(pipeline.get("model_profile") or "")
     if not profile_id:
         raise ValueError(f"Pipeline has no model_profile: {pipeline_id}")
-    return model_for_profile(profile_id)
+    profile = model_profile_config(profile_id, model_registry_path)
+    return AIModelConfig(
+        pipeline_id=pipeline_id,
+        model_profile=profile_id,
+        model=explicit_model or str(profile["model"]),
+        provider=str(profile.get("provider") or registry.get("provider") or DEFAULT_AI_PROVIDER),
+        api_base=str(profile.get("api_base") or registry.get("api_base") or DEFAULT_AI_API_BASE),
+        api_key_env=str(profile.get("api_key_env") or registry.get("api_key_env") or DEFAULT_AI_API_KEY_ENV),
+    )
+
+
+def resolve_ai_model(pipeline_id: str, explicit_model: str = "") -> str:
+    return resolve_ai_model_config(pipeline_id, explicit_model).model
+
+
+def ai_api_key(model_config: AIModelConfig) -> str:
+    return os.environ.get(model_config.api_key_env, "").strip()
 
 
 def load_prompt(path: str | Path) -> dict[str, str]:

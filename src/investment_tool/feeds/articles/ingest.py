@@ -17,7 +17,6 @@ import datetime as dt
 import hashlib
 import html
 import json
-import os
 import re
 import sys
 from html.parser import HTMLParser
@@ -26,7 +25,15 @@ from typing import Any, Sequence
 
 from investment_tool.analysis.openai import call_responses_json
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.config import DEFAULT_ARTICLES_MODULE_ID, default_feed_config, load_pipeline_config, read_json, resolve_ai_model
+from investment_tool.runtime.config import (
+    AIModelConfig,
+    DEFAULT_ARTICLES_MODULE_ID,
+    ai_api_key,
+    default_feed_config,
+    load_pipeline_config,
+    read_json,
+    resolve_ai_model_config,
+)
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
 
@@ -289,10 +296,10 @@ def analyze_article_with_openai(
     item: dict[str, Any],
     text: str,
     html_meta: dict[str, Any],
-    model: str,
+    model_config: AIModelConfig,
     max_output_tokens: int,
 ) -> dict[str, Any] | None:
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    api_key = ai_api_key(model_config)
     if not api_key:
         return None
     schema = {
@@ -344,7 +351,7 @@ def analyze_article_with_openai(
     try:
         analysis, _ = call_responses_json(
             api_key=api_key,
-            model=model,
+            model=model_config.model,
             system_prompt=(
                 "You classify configured-feed web archive articles for a private investment archive. "
                 "Use text only. Never request OCR. Output valid JSON only."
@@ -354,6 +361,7 @@ def analyze_article_with_openai(
             schema=schema,
             max_output_tokens=max_output_tokens,
             timeout=90,
+            api_base=model_config.api_base,
         )
     except Exception as exc:
         print(f"WARN: OpenAI HC analysis failed: {exc}", file=sys.stderr)
@@ -431,7 +439,8 @@ def process_articles(args: argparse.Namespace) -> int:
     if args.limit:
         index = index[: args.limit]
     pipeline = load_pipeline_config(PIPELINE_ID)
-    model = resolve_ai_model(PIPELINE_ID, args.model, ("OPENAI_HARDCORE_MODEL", "OPENAI_ANALYSIS_MODEL"))
+    model_config = resolve_ai_model_config(PIPELINE_ID, args.model)
+    model = model_config.model
     max_output_tokens = int(pipeline["max_output_tokens"])
     run_ai = bool(args.analyze)
     existing_complete = 0
@@ -459,6 +468,10 @@ def process_articles(args: argparse.Namespace) -> int:
         analyze=str(run_ai).lower(),
         force_ai=str(args.force_ai).lower(),
         model=model,
+        model_profile=model_config.model_profile,
+        provider=model_config.provider,
+        api_base=model_config.api_base,
+        api_key_env=model_config.api_key_env,
         archive_dir=portable_path(archive_dir),
         output_dir=portable_path(output_dir),
         records_dir=portable_path(article_json_dir),
@@ -507,7 +520,7 @@ def process_articles(args: argparse.Namespace) -> int:
         elif analysis:
             stats["ai_skipped"] += 1
         else:
-            analysis = analyze_article_with_openai(item, text, html_meta, model, max_output_tokens)
+            analysis = analyze_article_with_openai(item, text, html_meta, model_config, max_output_tokens)
             if analysis:
                 analysis["analyzed_at"] = iso_now()
                 analysis["input_fingerprint"] = fingerprint
@@ -562,6 +575,10 @@ def process_articles(args: argparse.Namespace) -> int:
         "records_dir": portable_path(article_json_dir),
         "evidence_dir": portable_path(evidence_dir),
         "model": model,
+        "model_profile": model_config.model_profile,
+        "provider": model_config.provider,
+        "api_base": model_config.api_base,
+        "api_key_env": model_config.api_key_env,
         "pipeline": PIPELINE_ID,
         **stats,
     }

@@ -32,6 +32,7 @@ def call_responses_json(
     schema: dict[str, Any],
     max_output_tokens: int,
     timeout: int = 90,
+    api_base: str = OPENAI_API_BASE,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     payload = {
         "model": model,
@@ -55,6 +56,7 @@ def call_responses_json(
         api_key=api_key,
         body=payload,
         timeout=timeout,
+        api_base=api_base,
     )
     text = extract_response_text(response)
     try:

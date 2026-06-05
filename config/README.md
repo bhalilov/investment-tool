@@ -18,4 +18,6 @@ Config files describe runtime behavior without changing Python code.
 - Do not store secrets here.
 - Feed-specific notes belong in feed config, not in Python constants.
 - Model and prompt choices should be configurable before paid AI runs.
+- AI model profiles may set `provider`, `api_base`, and `api_key_env`.
+  Store only the env var name here, never the key value.
 - Use portable paths such as `<data>` and project-relative paths.
