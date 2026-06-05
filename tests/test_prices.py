@@ -76,6 +76,24 @@ class PricesTests(unittest.TestCase):
         self.assertAlmostEqual(converted[1]["close"], 25.0)
         self.assertEqual(converted[1]["original_close"], 200)
 
+    def test_first_window_row_can_use_previous_cached_fx_rate(self):
+        rows = [
+            {"date": "2026-05-29", "open": 100, "high": 100, "low": 100, "close": 100, "adjusted_close": 100},
+            {"date": "2026-06-01", "open": 200, "high": 200, "low": 200, "close": 200, "adjusted_close": 200},
+        ]
+        fx_cache = {
+            "KRW": (
+                {"2026-05-28": 0.00073, "2026-06-01": 0.00074},
+                {"fx_provider": "fixture", "fx_provider_symbol": "USDKRW=X", "fx_direction": "inverse", "fx_currency": "KRW"},
+            )
+        }
+
+        converted, meta = market_prices.convert_rows_to_usd(rows, "KRW", fx_cache, "2026-05-29", "2026-06-05")
+
+        self.assertEqual(meta["fx_missing_dates_filled"], ["2026-05-29"])
+        self.assertAlmostEqual(converted[0]["close"], 0.073)
+        self.assertAlmostEqual(converted[1]["close"], 0.148)
+
     def test_timestamp_rows_are_converted_using_date_part(self):
         rows = [
             {

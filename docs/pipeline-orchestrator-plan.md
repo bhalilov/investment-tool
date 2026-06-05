@@ -253,6 +253,12 @@ Runs image description/OCR preparation for new or changed downloaded photos.
 This stage may call OpenAI in `workflow update`, but it is not the thread Phase
 1 reasoning pass. Videos and animated GIFs remain placeholders only.
 
+For scheduled `workflow update`, `x-capture` writes a latest-capture manifest
+with the local media keys referenced by that run. The `descriptions` stage uses
+that manifest so incremental runs analyze only the current run's images, not the
+historical media backlog. Explicit rebuilds can still process broader missing
+description work when requested.
+
 ### render
 
 Generates thread HTML and index pages from clean JSON. Rendering is split from

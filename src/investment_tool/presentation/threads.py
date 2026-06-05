@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import html
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,68 @@ def date_prefix(tweet: dict[str, Any] | None, items: list[dict[str, Any]]) -> st
     item = tweet or (items[0] if items else {})
     created = item.get("created_at") or ""
     return created[:10].replace("-", "") if len(created) >= 10 else dt.datetime.now().strftime("%Y%m%d")
+
+
+def load_media_description_records(description_dir: Path, keys: set[str]) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
+    for key in sorted(keys):
+        path = description_dir / f"{key}.json"
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            records[key] = data
+    return records
+
+
+def compact_values(values: Any, limit: int = 6) -> str:
+    if not isinstance(values, list):
+        return ""
+    clean = [str(value).strip() for value in values if str(value).strip()]
+    return ", ".join(clean[:limit])
+
+
+def render_media_description(key: str, record: dict[str, Any] | None, has_local_image: bool) -> str:
+    if not record:
+        if not has_local_image:
+            return ""
+        return (
+            "<div class='image-description pending'>"
+            f"<strong>Image AI description</strong> pending for {html.escape(key)}"
+            "</div>"
+        )
+    analysis = record.get("analysis") or {}
+    if not isinstance(analysis, dict):
+        analysis = {}
+    rows = [
+        ("Type", display_token(str(analysis.get("visual_type") or ""))),
+        ("Summary", str(analysis.get("summary") or "")),
+        ("Tickers", compact_values(analysis.get("detected_tickers"))),
+        ("Companies", compact_values(analysis.get("detected_companies"))),
+        ("Visible text", compact_values(analysis.get("visible_text"), limit=10)),
+        ("Key numbers", compact_values(analysis.get("key_numbers"))),
+        ("Dates", compact_values(analysis.get("dates_or_timeframes"))),
+        ("Chart/table", str(analysis.get("chart_or_table_summary") or "")),
+        ("Uncertainty", compact_values(analysis.get("uncertainties"))),
+        ("Confidence", str(analysis.get("confidence") or "")),
+    ]
+    row_html = "".join(
+        f"<dt>{html.escape(label)}</dt><dd>{html.escape(value)}</dd>"
+        for label, value in rows
+        if value
+    )
+    analyzed_at = str(record.get("analyzed_at") or "")
+    model = str(record.get("model") or "")
+    return f"""
+<details class="image-description" open>
+  <summary>Image AI description</summary>
+  <dl>{row_html}</dl>
+  <div class="media-meta">media {html.escape(key)} | model {html.escape(model)} | analyzed {html.escape(analyzed_at)}</div>
+</details>
+"""
 
 
 def render_thread_html(
@@ -60,6 +123,9 @@ def render_thread_html(
     )
     daily_index_rel = os.path.relpath(root_dir / "indexes" / "daily" / daily_name, path.parent)
     cards: list[str] = []
+    description_dir = root_dir.parent / "context" / "descriptions" / "x"
+    all_media_keys = {key for item in items for key in media_keys(item)}
+    media_descriptions = load_media_description_records(description_dir, all_media_keys)
     for item in sorted(items, key=lambda x: x.get("created_at") or ""):
         refs = ", ".join(f"{r.get('type')}:{r.get('id')}" for r in item.get("referenced_tweets") or []) or "none"
         metrics = item.get("public_metrics") or {}
@@ -79,6 +145,7 @@ def render_thread_html(
                 media_file = resolve_portable_path(local)
                 media_src = os.path.relpath(media_file, path.parent)
                 media_html.append(f"<img src='{html.escape(media_src)}' alt='downloaded X media'>")
+            media_html.append(render_media_description(key, media_descriptions.get(key), bool(local)))
         item_author = author(item, users)
         cards.append(
             f"""
@@ -160,6 +227,12 @@ def render_thread_html(
     .nav {{ display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 18px; }}
     .nav a {{ display: inline-block; padding: 6px 10px; border: 1px solid #ccd6dd; border-radius: 6px; text-decoration: none; color: #0f1419; background: #fff; }}
     .summary, .meta, .media-meta {{ color: #536471; font-size: 13px; }}
+    .image-description {{ border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 6px; padding: 10px 12px; margin-top: 10px; max-width: 876px; }}
+    .image-description.pending {{ color: #536471; }}
+    .image-description summary {{ cursor: pointer; font-weight: 700; margin-bottom: 8px; }}
+    .image-description dl {{ display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; margin: 0 0 8px; }}
+    .image-description dt {{ color: #536471; }}
+    .image-description dd {{ margin: 0; }}
     .panel {{ border: 1px solid #d8e0e8; border-radius: 8px; padding: 14px; max-width: 980px; margin: 14px 0 20px; background: #f8fafc; }}
     .panel dl {{ display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; margin: 0; }}
     .panel dt {{ color: #536471; }}

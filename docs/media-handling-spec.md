@@ -48,3 +48,12 @@ Current fields include:
 
 Media description is visual extraction only. It must not infer trading action or
 feed-account intent.
+
+Scheduled incremental runs scope media description to the latest X capture
+manifest, which contains the local media keys referenced by that capture. This
+prevents routine 15-minute runs from reprocessing or unexpectedly starting the
+whole historical media backlog.
+
+Rendered thread HTML may display the media description under each image for
+human verification. The description JSON remains the reusable source; HTML is
+derived output only.

@@ -201,6 +201,32 @@ def write_usage_estimate(root: Path, run_id: str, client: XClient) -> dict[str, 
     return record
 
 
+def write_capture_manifest(
+    root: Path,
+    run_id: str,
+    raw_dir: Path,
+    entries: list[dict[str, Any]],
+    media_paths: dict[str, str],
+    ignored: int,
+) -> dict[str, Any]:
+    usage_dir = root / "usage"
+    usage_dir.mkdir(parents=True, exist_ok=True)
+    record = {
+        "run_id": run_id,
+        "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "raw_api_dir": portable_path(raw_dir),
+        "threads": len(entries),
+        "ignored": ignored,
+        "conversation_ids": sorted(str(entry.get("conversation_id") or "") for entry in entries if entry.get("conversation_id")),
+        "description_media_keys": sorted(media_paths),
+        "media_paths": {key: media_paths[key] for key in sorted(media_paths)},
+    }
+    with (usage_dir / "capture_runs.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    (usage_dir / "latest_capture_manifest.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+    return record
+
+
 def missing_media_metadata_targets(json_dir: Path, raw_media: dict[str, dict]) -> dict[str, set[str]]:
     targets: dict[str, set[str]] = defaultdict(set)
     for json_path in sorted(json_dir.glob("*.json")):
@@ -706,12 +732,14 @@ def run_live_x_capture(
         reporter,
     )
     usage = write_usage_estimate(paths.root, run_id, state.client)
+    capture_manifest = write_capture_manifest(paths.root, run_id, paths.raw_dir, entries, media_paths, ignored_this_run)
     return {
         "threads": len(entries),
         "ignored": ignored_this_run,
         "raw_api_dir": portable_path(paths.raw_dir),
         "records_dir": portable_path(paths.json_dir),
         "media_dir": portable_path(paths.media_dir),
+        "description_media_keys": capture_manifest["description_media_keys"],
         "api_calls": state.client.call_count,
         "unique_post_reads_estimate": usage["unique_post_ids_returned"],
         "estimated_x_cost_usd": usage["estimated_cost_usd"],

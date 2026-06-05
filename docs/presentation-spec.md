@@ -19,7 +19,11 @@ Thread pages show:
 - local JSON and X root links;
 - evidence notes, ambiguities, and contradictions when available;
 - posts in chronological order;
-- downloaded images inline.
+- downloaded images inline;
+- image AI description blocks under downloaded images when matching
+  `context/descriptions/x/<media_key>.json` files exist;
+- pending image-description markers for downloaded images whose description JSON
+  is still missing.
 
 Owned ticker highlighting is browser-side and reads `indexes/current_owned.json`.
 Owned status must not be written as static thread evidence.
@@ -38,7 +42,8 @@ Indexes are interactive Tabulator pages. They include:
 Index dates are browser-rendered relative times from stored timestamps. They
 must not be frozen as static "19h ago" text.
 
-## Render Split Target
+## Render Split
 
-Current capture still renders pages. Target workflow separates rendering into a
-`render` stage that regenerates pages from clean JSON.
+Feed capture does not own presentation output. The workflow `render` stage
+regenerates pages and indexes from clean JSON plus available context files such
+as image descriptions and browser-side owned ticker data.

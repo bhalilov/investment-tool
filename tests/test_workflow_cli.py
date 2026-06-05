@@ -2,11 +2,14 @@ import argparse
 import contextlib
 import io
 import os
+import json
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from investment_tool.cli import main as cli_main
+from investment_tool.runtime.config import WorkflowStage
 from investment_tool.workflow import run as workflow_run
 
 
@@ -104,6 +107,76 @@ class WorkflowCliTests(unittest.TestCase):
 
         self.assertEqual(result.status, "success")
         self.assertEqual(seen, [("prices", "investment_tool.context.prices")])
+
+    def test_update_descriptions_scope_uses_latest_x_capture_media_keys(self):
+        old_data_root = os.environ.get("INVESTMENT_TOOL_DATA_DIR")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["INVESTMENT_TOOL_DATA_DIR"] = tmp
+            usage = Path(tmp) / "feeds" / "x" / "usage"
+            usage.mkdir(parents=True)
+            (usage / "latest_capture_manifest.json").write_text(
+                json.dumps({"description_media_keys": ["3_b", "3_a", "3_a"]}),
+                encoding="utf-8",
+            )
+            stage = WorkflowStage(
+                stage="descriptions",
+                module_id="descriptions",
+                platform="local",
+                kind="context",
+                entrypoint="investment_tool.context.descriptions",
+                feed_config="config/feeds/x_accounts.json",
+                runner="descriptions",
+                action="",
+                argv=(),
+            )
+            args = argparse.Namespace(command="update", feed_config="", feed_id="", force=False)
+            calls = []
+            stdout = io.StringIO()
+            try:
+                with patch("investment_tool.context.descriptions.main", side_effect=lambda argv: calls.append(argv) or 0):
+                    with contextlib.redirect_stdout(stdout):
+                        code = workflow_run.run_descriptions_stage(stage, args)
+            finally:
+                if old_data_root is None:
+                    os.environ.pop("INVESTMENT_TOOL_DATA_DIR", None)
+                else:
+                    os.environ["INVESTMENT_TOOL_DATA_DIR"] = old_data_root
+
+        self.assertEqual(code, 0)
+        self.assertIn("DESCRIPTIONS_SCOPE=latest_x_capture", stdout.getvalue())
+        self.assertEqual(calls[0].count("--media-key"), 2)
+        self.assertLess(calls[0].index("3_a"), calls[0].index("3_b"))
+
+    def test_update_descriptions_skips_when_latest_capture_has_no_media(self):
+        old_data_root = os.environ.get("INVESTMENT_TOOL_DATA_DIR")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["INVESTMENT_TOOL_DATA_DIR"] = tmp
+            stage = WorkflowStage(
+                stage="descriptions",
+                module_id="descriptions",
+                platform="local",
+                kind="context",
+                entrypoint="investment_tool.context.descriptions",
+                feed_config="config/feeds/x_accounts.json",
+                runner="descriptions",
+                action="",
+                argv=(),
+            )
+            args = argparse.Namespace(command="update", feed_config="", feed_id="", force=False)
+            stdout = io.StringIO()
+            try:
+                with patch("investment_tool.context.descriptions.main") as mocked:
+                    with contextlib.redirect_stdout(stdout):
+                        code = workflow_run.run_descriptions_stage(stage, args)
+            finally:
+                if old_data_root is None:
+                    os.environ.pop("INVESTMENT_TOOL_DATA_DIR", None)
+                else:
+                    os.environ["INVESTMENT_TOOL_DATA_DIR"] = old_data_root
+
+        self.assertEqual(code, 0)
+        self.assertFalse(mocked.called)
+        self.assertIn("DESCRIPTIONS_SKIPPED=no_media_keys_from_latest_capture", stdout.getvalue())
 
 
 if __name__ == "__main__":

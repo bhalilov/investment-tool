@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import importlib
+import json
 import os
 import sys
 import time
@@ -251,6 +252,15 @@ def run_descriptions_stage(stage: WorkflowStage, args: argparse.Namespace) -> in
     ]
     if getattr(args, "force", False):
         description_args.append("--force")
+    if getattr(args, "command", "") in {"update", "sync", "refresh"}:
+        media_keys = latest_x_capture_media_keys()
+        print("DESCRIPTIONS_SCOPE=latest_x_capture")
+        print(f"DESCRIPTIONS_MEDIA_KEYS={len(media_keys)}")
+        if not media_keys:
+            print("DESCRIPTIONS_SKIPPED=no_media_keys_from_latest_capture")
+            return 0
+        for key in media_keys:
+            description_args.extend(["--media-key", key])
     return descriptions.main(description_args)
 
 
@@ -260,6 +270,20 @@ STAGE_RUNNERS = {
     "screenshots_inbox": run_screenshots_stage,
     "descriptions": run_descriptions_stage,
 }
+
+
+def latest_x_capture_media_keys() -> list[str]:
+    manifest_path = storage_paths().x_usage / "latest_capture_manifest.json"
+    if not manifest_path.exists():
+        return []
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    keys = data.get("description_media_keys") or []
+    if not isinstance(keys, list):
+        return []
+    return sorted({str(key).strip() for key in keys if str(key).strip()})
 
 
 def run_stage(stage_name: str, args: argparse.Namespace) -> StageResult:

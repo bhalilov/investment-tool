@@ -204,6 +204,7 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
     print(f"RAW_API_DIR={result['raw_api_dir']}")
     print(f"RECORDS_DIR={result['records_dir']}")
     print(f"MEDIA_DIR={result['media_dir']}")
+    print(f"DESCRIPTION_MEDIA_KEYS={len(result['description_media_keys'])}")
     print(f"API_CALLS={result['api_calls']}")
     print(f"UNIQUE_POST_READS_ESTIMATE={result['unique_post_reads_estimate']}")
     print(f"ESTIMATED_X_COST_USD={result['estimated_x_cost_usd']}")
@@ -215,6 +216,7 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
         unique_post_reads_estimate=result["unique_post_reads_estimate"],
         estimated_x_cost_usd=result["estimated_x_cost_usd"],
         ai_in_capture=False,
+        description_media_keys=len(result["description_media_keys"]),
         records_dir=result["records_dir"],
     )
     return 0

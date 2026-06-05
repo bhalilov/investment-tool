@@ -270,6 +270,7 @@ def convert_rows_to_usd(
     if currency not in fx_cache:
         fx_cache[currency] = fx_daily(str(currency), start, end)
     rates, fx_meta = fx_cache[currency]
+    rate_dates = sorted(rates)
 
     converted = []
     last_rate: float | None = None
@@ -280,7 +281,7 @@ def convert_rows_to_usd(
         rate = rates.get(row_date)
         if rate is None:
             missing_dates.append(row_date)
-            rate = last_rate
+            rate = last_rate or previous_fx_rate(rates, rate_dates, row_date)
         if rate is None:
             raise RuntimeError(f"Missing FX rate for {currency} on {row_date}")
         last_rate = rate
@@ -302,6 +303,13 @@ def convert_rows_to_usd(
         "fx_missing_dates_filled": missing_dates,
         **fx_meta,
     }
+
+
+def previous_fx_rate(rates: dict[str, float], rate_dates: list[str], row_date: str) -> float | None:
+    for candidate in reversed(rate_dates):
+        if candidate <= row_date:
+            return rates[candidate]
+    return None
 
 
 def row_bar_date(row: dict[str, Any]) -> str:
