@@ -4,7 +4,8 @@ This spec records current X reconstruction behavior.
 
 ## Inputs
 
-- Configured X feed profile from `config/feeds/x_accounts.json`.
+- Configured X feed profile resolved through `config/feed_modules.json`; the
+  current X module points to `config/feeds/x_accounts.json`.
 - Thread rules from `config/rules/thread_reconstruction.default.json`.
 - Raw X API responses stored under runtime `feeds/x/raw`.
 - Existing clean thread JSON used as cache when available.

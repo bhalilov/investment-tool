@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Sequence
 
 from investment_tool.runtime.env import load_env
+from investment_tool.runtime.config import DEFAULT_X_MODULE_ID, default_feed_config
 from investment_tool.runtime.paths import data_root_for_x_root, portable_path, resolve_portable_path
 from investment_tool.runtime.reporting import start_reporter
 from investment_tool.feeds.x.api import XClient, refresh_x_user_token
@@ -40,7 +41,7 @@ def apply_context_data_root(context: XCaptureContext) -> None:
 
 
 def add_x_common_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-config", default=default_feed_config(DEFAULT_X_MODULE_ID))
     parser.add_argument("--feed-id", default="")
     parser.add_argument("--timeline-pages", type=int, default=3)
     parser.add_argument("--conversation-pages", type=int, default=0, help="Override configured conversation page depth.")

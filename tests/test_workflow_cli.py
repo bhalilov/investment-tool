@@ -1,10 +1,13 @@
+import argparse
 import contextlib
 import io
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from investment_tool.cli import main as cli_main
+from investment_tool.workflow import run as workflow_run
 
 
 class WorkflowCliTests(unittest.TestCase):
@@ -87,6 +90,20 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("DATA_ROOT path=<data>", stdout)
         self.assertIn("MISSING_PATHS=", stdout)
+
+    def test_run_stage_uses_registry_backed_stage_runner(self):
+        seen = []
+
+        def fake_module_main(stage, _args):
+            seen.append((stage.stage, stage.entrypoint))
+            return 0
+
+        args = argparse.Namespace(dry_run=False)
+        with patch.dict(workflow_run.STAGE_RUNNERS, {"module_main": fake_module_main}):
+            result = workflow_run.run_stage("prices", args)
+
+        self.assertEqual(result.status, "success")
+        self.assertEqual(seen, [("prices", "investment_tool.context.prices")])
 
 
 if __name__ == "__main__":

@@ -26,13 +26,12 @@ from typing import Any, Sequence
 
 from investment_tool.analysis.openai import call_responses_json
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.config import read_json
+from investment_tool.runtime.config import DEFAULT_ARTICLES_MODULE_ID, default_feed_config, load_pipeline_config, read_json, resolve_ai_model
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
 
 
-DEFAULT_OPENAI_MODEL = "gpt-5.5"
-DEFAULT_FEED_CONFIG = "config/feeds/web_archives.json"
+PIPELINE_ID = "article_archive_analysis"
 ARTICLE_FEED: dict[str, Any] = {}
 
 SIGNAL_VALUES = {
@@ -55,7 +54,8 @@ TIME_HORIZON_VALUES = {"INTRADAY", "DAYS", "WEEKS", "MONTHS", "YEARS", "UNCLEAR"
 PRIORITY_VALUES = {"P0", "P1", "P2", "P3", "P4"}
 
 
-def load_article_feed(config_path: str | Path = DEFAULT_FEED_CONFIG, feed_id: str = "") -> dict[str, Any]:
+def load_article_feed(config_path: str | Path | None = None, feed_id: str = "") -> dict[str, Any]:
+    config_path = config_path or default_feed_config(DEFAULT_ARTICLES_MODULE_ID)
     config = read_json(config_path)
     wanted = feed_id or str(config.get("default_feed_id") or "")
     for feed in config.get("feeds") or []:
@@ -290,6 +290,7 @@ def analyze_article_with_openai(
     text: str,
     html_meta: dict[str, Any],
     model: str,
+    max_output_tokens: int,
 ) -> dict[str, Any] | None:
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
@@ -351,7 +352,7 @@ def analyze_article_with_openai(
             user_content=[{"type": "input_text", "text": build_ai_prompt(item, text, html_meta)}],
             schema_name="hardcore_article_analysis",
             schema=schema,
-            max_output_tokens=5000,
+            max_output_tokens=max_output_tokens,
             timeout=90,
         )
     except Exception as exc:
@@ -429,7 +430,9 @@ def process_articles(args: argparse.Namespace) -> int:
     index = load_article_index(archive_dir)
     if args.limit:
         index = index[: args.limit]
-    model = args.model or os.environ.get("OPENAI_HARDCORE_MODEL") or os.environ.get("OPENAI_ANALYSIS_MODEL") or DEFAULT_OPENAI_MODEL
+    pipeline = load_pipeline_config(PIPELINE_ID)
+    model = resolve_ai_model(PIPELINE_ID, args.model, ("OPENAI_HARDCORE_MODEL", "OPENAI_ANALYSIS_MODEL"))
+    max_output_tokens = int(pipeline["max_output_tokens"])
     run_ai = bool(args.analyze)
     existing_complete = 0
     if run_ai and article_json_dir.exists() and not args.force_ai:
@@ -504,7 +507,7 @@ def process_articles(args: argparse.Namespace) -> int:
         elif analysis:
             stats["ai_skipped"] += 1
         else:
-            analysis = analyze_article_with_openai(item, text, html_meta, model)
+            analysis = analyze_article_with_openai(item, text, html_meta, model, max_output_tokens)
             if analysis:
                 analysis["analyzed_at"] = iso_now()
                 analysis["input_fingerprint"] = fingerprint
@@ -559,6 +562,7 @@ def process_articles(args: argparse.Namespace) -> int:
         "records_dir": portable_path(article_json_dir),
         "evidence_dir": portable_path(evidence_dir),
         "model": model,
+        "pipeline": PIPELINE_ID,
         **stats,
     }
     if not args.dry_run:
@@ -574,7 +578,7 @@ def process_articles(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ingest manually captured web-archive articles.")
-    parser.add_argument("--feed-config", default=DEFAULT_FEED_CONFIG)
+    parser.add_argument("--feed-config", default=default_feed_config(DEFAULT_ARTICLES_MODULE_ID))
     parser.add_argument("--feed-id", default="")
     parser.add_argument("--archive-dir", default="")
     parser.add_argument("--output-dir", default="")

@@ -46,6 +46,15 @@
       "max_output_tokens": 12000,
       "write_evidence": true,
       "sync_vector_after_write": false
+    },
+    {
+      "pipeline_id": "article_archive_analysis",
+      "model_profile": "premium_reasoning",
+      "max_output_tokens": 5000,
+      "writes": "article_json_and_markdown_evidence",
+      "ocr": false,
+      "requires_explicit_approval": true,
+      "sync_vector_after_write": false
     }
   ]
 }

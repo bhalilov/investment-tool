@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_X_FEEDS_CONFIG = PROJECT_ROOT / "config" / "feeds" / "x_accounts.json"
+DEFAULT_FEED_MODULES_CONFIG = "config/feed_modules.json"
+DEFAULT_X_MODULE_ID = "x-capture"
+DEFAULT_ARTICLES_MODULE_ID = "articles"
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,20 @@ class FeedModule:
     entrypoint: str
     feed_config: str
     supports: tuple[str, ...]
+    workflow_stages: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class WorkflowStage:
+    stage: str
+    module_id: str
+    platform: str
+    kind: str
+    entrypoint: str
+    feed_config: str
+    runner: str
+    action: str
+    argv: tuple[str, ...]
 
 
 def project_path(path_text: str | Path) -> Path:
@@ -55,7 +72,8 @@ def file_sha256(path: str | Path) -> str:
     return hashlib.sha256(project_path(path).read_bytes()).hexdigest()
 
 
-def load_x_feed_profile(config_path: str | Path = DEFAULT_X_FEEDS_CONFIG, feed_id: str = "") -> FeedProfile:
+def load_x_feed_profile(config_path: str | Path | None = None, feed_id: str = "") -> FeedProfile:
+    config_path = config_path or default_feed_config(DEFAULT_X_MODULE_ID)
     config = read_json(config_path)
     wanted = feed_id or str(config.get("default_feed_id") or "")
     feeds = config.get("feeds") or []
@@ -83,7 +101,7 @@ def load_feed_rules(profile: FeedProfile) -> tuple[dict[str, Any], dict[str, Any
     return read_json(profile.thread_rules_path), read_json(profile.media_rules_path)
 
 
-def load_feed_modules(path: str | Path = "config/feed_modules.json") -> dict[str, FeedModule]:
+def load_feed_modules(path: str | Path = DEFAULT_FEED_MODULES_CONFIG) -> dict[str, FeedModule]:
     config = read_json(path)
     modules: dict[str, FeedModule] = {}
     for item in config.get("modules") or []:
@@ -94,10 +112,39 @@ def load_feed_modules(path: str | Path = "config/feed_modules.json") -> dict[str
             entrypoint=str(item.get("entrypoint") or ""),
             feed_config=str(item.get("feed_config") or ""),
             supports=tuple(str(value) for value in item.get("supports") or []),
+            workflow_stages=tuple(dict(value) for value in item.get("workflow_stages") or []),
         )
         if module.module_id:
             modules[module.module_id] = module
     return modules
+
+
+def default_feed_config(module_id: str = DEFAULT_X_MODULE_ID) -> str:
+    module = load_feed_modules().get(module_id)
+    if not module or not module.feed_config:
+        raise ValueError(f"Feed module has no configured feed_config: {module_id}")
+    return module.feed_config
+
+
+def load_workflow_stages(path: str | Path = DEFAULT_FEED_MODULES_CONFIG) -> dict[str, WorkflowStage]:
+    stages: dict[str, WorkflowStage] = {}
+    for module in load_feed_modules(path).values():
+        for raw_stage in module.workflow_stages:
+            stage = str(raw_stage.get("stage") or "")
+            if not stage:
+                continue
+            stages[stage] = WorkflowStage(
+                stage=stage,
+                module_id=module.module_id,
+                platform=module.platform,
+                kind=module.kind,
+                entrypoint=module.entrypoint,
+                feed_config=module.feed_config,
+                runner=str(raw_stage.get("runner") or ""),
+                action=str(raw_stage.get("action") or ""),
+                argv=tuple(str(value) for value in raw_stage.get("argv") or []),
+            )
+    return stages
 
 
 def load_model_registry(path: str | Path = "config/ai/models.json") -> dict[str, Any]:
@@ -106,6 +153,36 @@ def load_model_registry(path: str | Path = "config/ai/models.json") -> dict[str,
 
 def load_pipeline_registry(path: str | Path = "config/ai/pipelines.json") -> dict[str, Any]:
     return read_json(path)
+
+
+def load_pipeline_config(pipeline_id: str, path: str | Path = "config/ai/pipelines.json") -> dict[str, Any]:
+    registry = load_pipeline_registry(path)
+    for pipeline in registry.get("pipelines") or []:
+        if pipeline.get("pipeline_id") == pipeline_id:
+            return dict(pipeline)
+    raise ValueError(f"Pipeline config not found: {pipeline_id}")
+
+
+def model_for_profile(profile_id: str, path: str | Path = "config/ai/models.json") -> str:
+    registry = load_model_registry(path)
+    profile = (registry.get("model_profiles") or {}).get(profile_id)
+    if not profile or not profile.get("model"):
+        raise ValueError(f"Model profile not found or missing model: {profile_id}")
+    return str(profile["model"])
+
+
+def resolve_ai_model(pipeline_id: str, explicit_model: str = "", env_vars: tuple[str, ...] = ()) -> str:
+    if explicit_model:
+        return explicit_model
+    for env_var in env_vars:
+        value = os.environ.get(env_var, "").strip()
+        if value:
+            return value
+    pipeline = load_pipeline_config(pipeline_id)
+    profile_id = str(pipeline.get("model_profile") or "")
+    if not profile_id:
+        raise ValueError(f"Pipeline has no model_profile: {pipeline_id}")
+    return model_for_profile(profile_id)
 
 
 def load_prompt(path: str | Path) -> dict[str, str]:

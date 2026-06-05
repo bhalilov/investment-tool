@@ -1,11 +1,16 @@
 import unittest
+from unittest.mock import patch
 
 from investment_tool.runtime.config import (
+    default_feed_config,
     load_model_registry,
+    load_pipeline_config,
     load_pipeline_registry,
     load_prompt,
     load_feed_modules,
     load_feed_rules,
+    load_workflow_stages,
+    resolve_ai_model,
     load_x_feed_profile,
     project_path,
     read_json,
@@ -36,7 +41,26 @@ class RuntimeConfigTests(unittest.TestCase):
 
         self.assertIn("x-capture", modules)
         self.assertIn("prices", modules)
+        self.assertIn("descriptions", modules)
         self.assertIn("raw_api_rebuild", modules["x-capture"].supports)
+        self.assertEqual(default_feed_config("x-capture"), modules["x-capture"].feed_config)
+
+    def test_workflow_stages_are_discoverable_from_feed_registry(self):
+        stages = load_workflow_stages()
+
+        self.assertEqual(stages["x-capture"].runner, "x_action")
+        self.assertEqual(stages["x-capture"].action, "x-capture")
+        self.assertEqual(stages["prices"].entrypoint, "investment_tool.context.prices")
+        self.assertEqual(stages["descriptions"].feed_config, default_feed_config("x-capture"))
+
+    def test_ai_models_resolve_from_pipeline_registry_with_env_override(self):
+        pipeline = load_pipeline_config("media_description")
+        registry = load_model_registry()
+        expected = registry["model_profiles"][pipeline["model_profile"]]["model"]
+
+        self.assertEqual(resolve_ai_model("media_description"), expected)
+        with patch.dict("os.environ", {"OPENAI_MEDIA_MODEL": "override-model"}):
+            self.assertEqual(resolve_ai_model("media_description", env_vars=("OPENAI_MEDIA_MODEL",)), "override-model")
 
     def test_configured_pipeline_prompts_and_schemas_exist(self):
         registry = load_pipeline_registry()

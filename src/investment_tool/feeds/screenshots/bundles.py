@@ -20,10 +20,20 @@ from investment_tool.analysis.openai import call_responses_json
 from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
-from investment_tool.runtime.config import FeedProfile, load_x_feed_profile, feed_identity, feed_label
+from investment_tool.runtime.config import (
+    DEFAULT_X_MODULE_ID,
+    FeedProfile,
+    default_feed_config,
+    feed_identity,
+    feed_label,
+    load_pipeline_config,
+    load_prompt,
+    load_x_feed_profile,
+    resolve_ai_model,
+)
 
 
-DEFAULT_OPENAI_MODEL = "gpt-5.5"
+PIPELINE_ID = "manual_screenshot_reconstruction"
 SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 FEED_PROFILE: FeedProfile = load_x_feed_profile()
 
@@ -391,7 +401,12 @@ def build_reconstruction_prompt(record: dict[str, Any]) -> str:
     )
 
 
-def analyze_bundle_with_openai(record: dict[str, Any], model: str) -> dict[str, Any] | None:
+def analyze_bundle_with_openai(
+    record: dict[str, Any],
+    model: str,
+    system_prompt: str,
+    max_output_tokens: int,
+) -> dict[str, Any] | None:
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         return None
@@ -407,15 +422,11 @@ def analyze_bundle_with_openai(record: dict[str, Any], model: str) -> dict[str, 
     reconstruction, _ = call_responses_json(
         api_key=api_key,
         model=model,
-        system_prompt=(
-            "You reconstruct visible X threads from manual screenshot evidence. "
-            "Group overlapping scroll screenshots, merge duplicates, describe embedded media, "
-            "and never invent missing text or investment conclusions. Output valid JSON only."
-        ),
+        system_prompt=system_prompt,
         user_content=content,
         schema_name="manual_x_thread_reconstruction",
         schema=reconstruction_schema(),
-        max_output_tokens=12000,
+        max_output_tokens=max_output_tokens,
         timeout=180,
     )
     return reconstruction
@@ -427,7 +438,10 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
     input_paths = normalize_input_paths(args.paths, args.input)
     output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage_paths().screenshots_root
     bundle_id = slugify(args.bundle_id) if args.bundle_id else bundle_id_for(input_paths, args.bundle_name)
-    model = args.model or os.environ.get("OPENAI_MANUAL_THREAD_MODEL") or DEFAULT_OPENAI_MODEL
+    pipeline = load_pipeline_config(PIPELINE_ID)
+    model = resolve_ai_model(PIPELINE_ID, args.model, ("OPENAI_MANUAL_THREAD_MODEL",))
+    system_prompt = load_prompt(pipeline["system_prompt"])["text"]
+    max_output_tokens = int(pipeline["max_output_tokens"])
     reporter = start_reporter(
         "manual_thread_import",
         total=len(input_paths),
@@ -457,7 +471,7 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
     path = write_bundle(record, input_paths, output_dir, force=args.force)
     reporter.checkpoint(processed=len(input_paths), force=True, bundle_path=portable_path(path))
     if args.analyze:
-        reconstruction = analyze_bundle_with_openai(record, model)
+        reconstruction = analyze_bundle_with_openai(record, model, system_prompt, max_output_tokens)
         if not reconstruction:
             reporter.fail(bundle_path=portable_path(path), reason="OPENAI_API_KEY is not configured")
             return 1
@@ -494,7 +508,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--input", action="append", default=[], help="Screenshot image path; may be repeated.")
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--env", default=".env")
-    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-config", default=default_feed_config(DEFAULT_X_MODULE_ID))
     parser.add_argument("--feed-id", default="")
     parser.add_argument("--bundle-id", default="")
     parser.add_argument("--bundle-name", default="")

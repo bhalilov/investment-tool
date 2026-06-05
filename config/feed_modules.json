@@ -13,6 +13,14 @@
         "missing_media_recovery",
         "photo_media_download",
         "non_photo_placeholders"
+      ],
+      "workflow_stages": [
+        {"stage": "x-capture", "runner": "x_action", "action": "x-capture"},
+        {"stage": "x-raw", "runner": "x_action", "action": "x-raw-rebuild"},
+        {"stage": "x-reindex", "runner": "x_action", "action": "x-reindex"},
+        {"stage": "x-repair-media-paths", "runner": "x_action", "action": "x-repair-media-paths"},
+        {"stage": "x-recover-media", "runner": "x_action", "action": "x-recover-media"},
+        {"stage": "render", "runner": "x_action", "action": "x-rerender"}
       ]
     },
     {
@@ -24,6 +32,9 @@
       "supports": [
         "manual_archive_ingest",
         "text_only_ai_analysis"
+      ],
+      "workflow_stages": [
+        {"stage": "articles", "runner": "module_main", "argv": ["--feed-config", "{feed_config}"]}
       ]
     },
     {
@@ -31,9 +42,13 @@
       "platform": "manual_screenshots",
       "kind": "manual_capture",
       "entrypoint": "investment_tool.feeds.screenshots.bundles",
+      "feed_config": "config/feeds/x_accounts.json",
       "supports": [
         "screenshot_bundle_import",
         "overlap_stitching_ai_reconstruction"
+      ],
+      "workflow_stages": [
+        {"stage": "screenshots", "runner": "screenshots_inbox"}
       ]
     },
     {
@@ -44,6 +59,23 @@
       "supports": [
         "daily_ohlcv",
         "usd_conversion"
+      ],
+      "workflow_stages": [
+        {"stage": "prices", "runner": "module_main"}
+      ]
+    },
+    {
+      "module_id": "descriptions",
+      "platform": "media_context",
+      "kind": "context_data",
+      "entrypoint": "investment_tool.context.descriptions",
+      "feed_config": "config/feeds/x_accounts.json",
+      "supports": [
+        "neutral_image_description",
+        "ocr_visible_text"
+      ],
+      "workflow_stages": [
+        {"stage": "descriptions", "runner": "descriptions"}
       ]
     }
   ]

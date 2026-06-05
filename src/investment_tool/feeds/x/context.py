@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.runtime.config import (
+    DEFAULT_X_MODULE_ID,
     FeedProfile,
+    default_feed_config,
     feed_identity,
     feed_label,
     load_feed_rules,
@@ -80,9 +82,9 @@ class XCaptureContext:
 
 
 def load_x_capture_context(
-    feed_config: str | Path = "config/feeds/x_accounts.json",
+    feed_config: str | Path | None = None,
     feed_id: str = "",
 ) -> XCaptureContext:
-    profile = load_x_feed_profile(feed_config, feed_id)
+    profile = load_x_feed_profile(feed_config or default_feed_config(DEFAULT_X_MODULE_ID), feed_id)
     thread_rules, media_rules = load_feed_rules(profile)
     return XCaptureContext(profile=profile, thread_rules=thread_rules, media_rules=media_rules)

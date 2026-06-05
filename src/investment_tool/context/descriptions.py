@@ -14,15 +14,23 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from investment_tool.analysis.openai import call_responses_json
-from investment_tool.runtime.config import FeedProfile, load_prompt, load_x_feed_profile, read_json, feed_identity
+from investment_tool.runtime.config import (
+    DEFAULT_X_MODULE_ID,
+    FeedProfile,
+    default_feed_config,
+    feed_identity,
+    load_pipeline_config,
+    load_prompt,
+    load_x_feed_profile,
+    read_json,
+    resolve_ai_model,
+)
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
 
 
-DEFAULT_OPENAI_MODEL = "gpt-5.5"
-DEFAULT_PROMPT_PATH = "prompts/media_description.md"
-DEFAULT_SCHEMA_PATH = "schemas/media_description.schema.json"
+PIPELINE_ID = "media_description"
 SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 FEED_PROFILE: FeedProfile = load_x_feed_profile()
 
@@ -97,6 +105,7 @@ def analyze_media_with_openai(
     model: str,
     prompt_text: str,
     schema: dict[str, Any],
+    max_output_tokens: int,
 ) -> dict[str, Any] | None:
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
@@ -114,7 +123,7 @@ def analyze_media_with_openai(
         ],
         schema_name="media_visual_observation",
         schema=schema,
-        max_output_tokens=1800,
+        max_output_tokens=max_output_tokens,
         timeout=90,
     )
     return analysis
@@ -143,9 +152,13 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
     load_env(Path(args.env).expanduser())
     configure_feed(load_x_feed_profile(args.feed_config, args.feed_id))
     storage = storage_paths()
-    model = args.model or os.environ.get("OPENAI_MEDIA_MODEL") or DEFAULT_OPENAI_MODEL
-    prompt = load_prompt(args.prompt)
-    schema = read_json(args.schema)
+    pipeline = load_pipeline_config(PIPELINE_ID)
+    model = resolve_ai_model(PIPELINE_ID, args.model, ("OPENAI_MEDIA_MODEL",))
+    prompt_path = args.prompt or str(pipeline["prompt"])
+    schema_path = args.schema or str(pipeline["schema"])
+    max_output_tokens = int(pipeline["max_output_tokens"])
+    prompt = load_prompt(prompt_path)
+    schema = read_json(schema_path)
     media_dir = resolve_portable_path(args.media_dir) if args.media_dir else storage.x_media
     output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage.x_descriptions
     paths = iter_media_paths(media_dir)
@@ -165,7 +178,8 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
         model=model,
         prompt_path=prompt["path"],
         prompt_sha256=prompt["sha256"],
-        schema=args.schema,
+        schema=schema_path,
+        pipeline=PIPELINE_ID,
     )
     stats = {
         "seen": 0,
@@ -190,7 +204,7 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
                 stats["skipped"] += 1
                 continue
             reporter.emit("WAITING", reason="openai_media_analysis", path=path.name, timeout_seconds=90, model=model)
-            analysis = analyze_media_with_openai(path, model, prompt["text"], schema)
+            analysis = analyze_media_with_openai(path, model, prompt["text"], schema, max_output_tokens)
             if not analysis:
                 stats["failed"] += 1
                 reporter.emit("ERROR", path=path.name, reason="missing_openai_api_key_or_empty_analysis")
@@ -214,7 +228,8 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
         "model": model,
         "prompt_path": prompt["path"],
         "prompt_sha256": prompt["sha256"],
-        "schema": args.schema,
+        "schema": schema_path,
+        "pipeline": PIPELINE_ID,
         **stats,
         "estimated_openai_cost_usd": cost,
     }
@@ -231,11 +246,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--media-dir", default="")
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--env", default=".env")
-    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-config", default=default_feed_config(DEFAULT_X_MODULE_ID))
     parser.add_argument("--feed-id", default="")
     parser.add_argument("--model", default="")
-    parser.add_argument("--prompt", default=DEFAULT_PROMPT_PATH)
-    parser.add_argument("--schema", default=DEFAULT_SCHEMA_PATH)
+    parser.add_argument("--prompt", default="")
+    parser.add_argument("--schema", default="")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--media-key", action="append", default=[], help="Analyze only this media key; may be repeated.")
     parser.add_argument("--force", action="store_true", help="Re-analyze even when output exists for the same image hash.")

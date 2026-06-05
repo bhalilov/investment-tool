@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib
 import os
 import sys
 import time
@@ -15,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+from investment_tool.runtime.config import DEFAULT_X_MODULE_ID, WorkflowStage, default_feed_config, load_workflow_stages
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
@@ -120,7 +122,7 @@ def write_workflow_log(
 
 
 def add_workflow_feed_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-config", default=default_feed_config(DEFAULT_X_MODULE_ID))
     parser.add_argument("--feed-id", default="")
 
 
@@ -177,9 +179,9 @@ def selected_stages(args: argparse.Namespace) -> list[str]:
     return [stage for stage in stages if stage not in skipped]
 
 
-def workflow_x_namespace(args: argparse.Namespace, **extra: object) -> argparse.Namespace:
+def workflow_x_namespace(args: argparse.Namespace, feed_config_default: str = "", **extra: object) -> argparse.Namespace:
     values = {
-        "feed_config": getattr(args, "feed_config", "config/feeds/x_accounts.json"),
+        "feed_config": getattr(args, "feed_config", "") or feed_config_default or default_feed_config(DEFAULT_X_MODULE_ID),
         "feed_id": getattr(args, "feed_id", ""),
         "timeline_pages": getattr(args, "timeline_pages", 3),
         "conversation_pages": getattr(args, "conversation_pages", 0),
@@ -200,7 +202,7 @@ def screenshot_inbox_paths() -> list[Path]:
     return sorted(path for path in inbox.iterdir() if path.is_file() and path.suffix.lower() in SCREENSHOT_SUFFIXES)
 
 
-def run_screenshots_stage(args: argparse.Namespace) -> int:
+def run_screenshots_stage(stage: WorkflowStage, args: argparse.Namespace) -> int:
     from investment_tool.feeds.screenshots import bundles as screenshot_bundles
 
     paths = screenshot_inbox_paths()
@@ -214,7 +216,7 @@ def run_screenshots_stage(args: argparse.Namespace) -> int:
             "--output-dir",
             portable_path(storage_paths().screenshots_root),
             "--feed-config",
-            getattr(args, "feed_config", "config/feeds/x_accounts.json"),
+            getattr(args, "feed_config", "") or stage.feed_config or default_feed_config(DEFAULT_X_MODULE_ID),
             "--feed-id",
             getattr(args, "feed_id", ""),
             "--analyze",
@@ -225,54 +227,56 @@ def run_screenshots_stage(args: argparse.Namespace) -> int:
     return screenshot_bundles.main(argv)
 
 
-def run_stage(stage: str, args: argparse.Namespace) -> StageResult:
+def resolve_stage_argv(stage: WorkflowStage) -> list[str]:
+    return [item.replace("{feed_config}", stage.feed_config) for item in stage.argv]
+
+
+def run_module_main_stage(stage: WorkflowStage, _: argparse.Namespace) -> int:
+    module = importlib.import_module(stage.entrypoint)
+    return int(module.main(resolve_stage_argv(stage)))
+
+
+def run_x_action_stage(stage: WorkflowStage, args: argparse.Namespace) -> int:
+    return run_x_action(workflow_x_namespace(args, stage.feed_config), stage.action)
+
+
+def run_descriptions_stage(stage: WorkflowStage, args: argparse.Namespace) -> int:
+    from investment_tool.context import descriptions
+
+    description_args = [
+        "--feed-config",
+        getattr(args, "feed_config", "") or stage.feed_config or default_feed_config(DEFAULT_X_MODULE_ID),
+        "--feed-id",
+        getattr(args, "feed_id", ""),
+    ]
+    if getattr(args, "force", False):
+        description_args.append("--force")
+    return descriptions.main(description_args)
+
+
+STAGE_RUNNERS = {
+    "module_main": run_module_main_stage,
+    "x_action": run_x_action_stage,
+    "screenshots_inbox": run_screenshots_stage,
+    "descriptions": run_descriptions_stage,
+}
+
+
+def run_stage(stage_name: str, args: argparse.Namespace) -> StageResult:
     started = iso_now()
     if getattr(args, "dry_run", False):
-        return StageResult(stage, "planned", 0, "dry run only; stage was not executed", started, iso_now())
+        return StageResult(stage_name, "planned", 0, "dry run only; stage was not executed", started, iso_now())
     try:
-        if stage == "x-capture":
-            code = run_x_action(workflow_x_namespace(args), "x-capture")
-        elif stage == "x-raw":
-            code = run_x_action(workflow_x_namespace(args), "x-raw-rebuild")
-        elif stage == "x-reindex":
-            code = run_x_action(workflow_x_namespace(args), "x-reindex")
-        elif stage == "x-repair-media-paths":
-            code = run_x_action(workflow_x_namespace(args), "x-repair-media-paths")
-        elif stage == "x-recover-media":
-            code = run_x_action(workflow_x_namespace(args), "x-recover-media")
-        elif stage == "render":
-            code = run_x_action(workflow_x_namespace(args), "x-rerender")
-        elif stage == "prices":
-            from investment_tool.context import prices
-
-            code = prices.main([])
-        elif stage == "descriptions":
-            from investment_tool.context import descriptions
-
-            description_args = [
-                "--feed-config",
-                getattr(args, "feed_config", "config/feeds/x_accounts.json"),
-                "--feed-id",
-                getattr(args, "feed_id", ""),
-            ]
-            if getattr(args, "force", False):
-                description_args.append("--force")
-            code = descriptions.main(description_args)
-        elif stage == "screenshots":
-            code = run_screenshots_stage(args)
-        elif stage == "articles":
-            from investment_tool.feeds.articles import ingest as articles_ingest
-
-            article_args = [
-                "--feed-config",
-                "config/feeds/web_archives.json",
-            ]
-            code = articles_ingest.main(article_args)
-        else:
-            return StageResult(stage, "failed", 2, f"unknown stage: {stage}", started, iso_now())
-        return StageResult(stage, "success" if code == 0 else "failed", code, "", started, iso_now())
+        stage = load_workflow_stages().get(stage_name)
+        if not stage:
+            return StageResult(stage_name, "failed", 2, f"unknown stage: {stage_name}", started, iso_now())
+        runner = STAGE_RUNNERS.get(stage.runner)
+        if not runner:
+            return StageResult(stage_name, "failed", 2, f"unknown stage runner: {stage.runner}", started, iso_now())
+        code = runner(stage, args)
+        return StageResult(stage_name, "success" if code == 0 else "failed", code, "", started, iso_now())
     except Exception as exc:
-        return StageResult(stage, "failed", 1, str(exc), started, iso_now())
+        return StageResult(stage_name, "failed", 1, str(exc), started, iso_now())
 
 
 def run_workflow_check(command: str) -> int:
