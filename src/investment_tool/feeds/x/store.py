@@ -82,8 +82,8 @@ def find_cached_thread_record(json_dir: Path, conversation_id: str) -> tuple[Pat
     return None
 
 
-def cleanup_old_thread_versions(json_dir: Path, threads_dir: Path, conversation_id: str, keep_json: Path, keep_html: Path) -> None:
-    """Remove older HTML/JSON versions for a conversation after canonical naming changes."""
+def cleanup_old_render_versions(json_dir: Path, threads_dir: Path, conversation_id: str, keep_json: Path, keep_html: Path) -> None:
+    """Remove older JSON/HTML versions after render picks the canonical filename."""
     for json_path in json_dir.glob(f"*__{conversation_id}.json"):
         if json_path.resolve() == keep_json.resolve():
             continue
@@ -302,7 +302,7 @@ def rerender_cached_threads(
         filename = f"{prefix}__{label}__{slug}__{conv_id}.html"
         html_path = threads_dir / filename
         json_path = json_dir / f"{prefix}__{label}__{slug}__{conv_id}.json"
-        cleanup_old_thread_versions(json_dir, threads_dir, conv_id, json_path, html_path)
+        cleanup_old_render_versions(json_dir, threads_dir, conv_id, json_path, html_path)
         render_thread_html(
             html_path,
             conv_id,

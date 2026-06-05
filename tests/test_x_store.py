@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from investment_tool.feeds.x.store import cleanup_old_json_versions
+from investment_tool.feeds.x.store import cleanup_old_json_versions, cleanup_old_render_versions
 
 
 class XStoreTests(unittest.TestCase):
@@ -25,6 +25,32 @@ class XStoreTests(unittest.TestCase):
             self.assertTrue(keep.exists())
             self.assertFalse(old.exists())
             self.assertTrue(page.exists())
+
+    def test_render_cleanup_removes_old_json_and_html_versions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = root / "records"
+            html = root / "html"
+            records.mkdir()
+            html.mkdir()
+            keep_json = records / "new-title__123.json"
+            old_json = records / "old-title__123.json"
+            keep_html = html / "new-title__123.html"
+            old_html = html / "old-title__123.html"
+            orphan_html = html / "older-title__123.html"
+            keep_json.write_text("{}", encoding="utf-8")
+            old_json.write_text('{"canonical_filename": "old-title__123.html"}', encoding="utf-8")
+            keep_html.write_text("<html>new</html>", encoding="utf-8")
+            old_html.write_text("<html>old</html>", encoding="utf-8")
+            orphan_html.write_text("<html>orphan</html>", encoding="utf-8")
+
+            cleanup_old_render_versions(records, html, "123", keep_json, keep_html)
+
+            self.assertTrue(keep_json.exists())
+            self.assertTrue(keep_html.exists())
+            self.assertFalse(old_json.exists())
+            self.assertFalse(old_html.exists())
+            self.assertFalse(orphan_html.exists())
 
 
 if __name__ == "__main__":

@@ -88,8 +88,17 @@ class XCapturePaths:
     presentation_root: Path
 
 
-def data_root() -> Path:
-    return storage_paths_for_x_root().root
+@dataclass
+class XCaptureState:
+    client: XClient
+    tweets: dict[str, dict]
+    users: dict[str, dict]
+    media: dict[str, dict]
+    cached_tweet_ids: dict[str, set[str]]
+
+    @property
+    def cached_conversation_ids(self) -> set[str]:
+        return set(self.cached_tweet_ids)
 
 
 def prepare_x_capture_paths(run_id: str, feed_root: str | Path | None = None) -> XCapturePaths:
@@ -253,84 +262,142 @@ def recover_missing_media_metadata(root: Path, client: XClient, context: XCaptur
     return stats
 
 
-def run_live_x_capture(
-    paths: XCapturePaths,
-    run_id: str,
-    env_path: Path,
-    token: str,
-    options: XCaptureOptions,
-    context: XCaptureContext,
-    reporter: JobReporter | None = None,
-) -> dict[str, Any]:
+def initialize_capture_state(paths: XCapturePaths, env_path: Path, token: str) -> XCaptureState:
     client = XClient(token, paths.raw_dir, refresh_callback=lambda: refresh_x_user_token(env_path))
     tweets: dict[str, dict] = {}
     users: dict[str, dict] = {}
     media: dict[str, dict] = {}
-
     cached_tweet_ids = load_cached_threads(paths.json_dir, tweets, users, media)
-    cached_conversation_ids = set(cached_tweet_ids.keys())
-    if cached_conversation_ids:
-        print(f"CACHED={len(cached_conversation_ids)} threads found locally")
+    if cached_tweet_ids:
+        print(f"CACHED={len(cached_tweet_ids)} threads found locally")
+    return XCaptureState(client, tweets, users, media, cached_tweet_ids)
 
+
+def fetch_seed_context(
+    state: XCaptureState,
+    options: XCaptureOptions,
+    context: XCaptureContext,
+    reporter: JobReporter | None,
+) -> list[str]:
     emit_checkpoint(reporter, "X_TIMELINE_FETCH_START", pages=options.timeline_pages)
-    seed_ids = fetch_timeline(client, context.user_id, options.timeline_pages, tweets, users, media)
-    emit_checkpoint(reporter, "X_TIMELINE_FETCH_DONE", seed_posts=len(seed_ids), total_posts=len(tweets), api_calls=client.call_count)
+    seed_ids = fetch_timeline(state.client, context.user_id, options.timeline_pages, state.tweets, state.users, state.media)
+    emit_checkpoint(
+        reporter,
+        "X_TIMELINE_FETCH_DONE",
+        seed_posts=len(seed_ids),
+        total_posts=len(state.tweets),
+        api_calls=state.client.call_count,
+    )
     if options.conversation_id:
         seed_ids.append(options.conversation_id)
-        fetch_tweets_by_ids(client, [options.conversation_id], tweets, users, media, "requested_conversation")
-        emit_checkpoint(reporter, "X_REQUESTED_CONVERSATION_FETCH_DONE", conversation_id=options.conversation_id, api_calls=client.call_count)
+        fetch_tweets_by_ids(
+            state.client,
+            [options.conversation_id],
+            state.tweets,
+            state.users,
+            state.media,
+            "requested_conversation",
+        )
+        emit_checkpoint(
+            reporter,
+            "X_REQUESTED_CONVERSATION_FETCH_DONE",
+            conversation_id=options.conversation_id,
+            api_calls=state.client.call_count,
+        )
     emit_checkpoint(reporter, "X_CONTEXT_WALK_START", seed_posts=len(seed_ids))
-    walk_context(client, seed_ids, tweets, users, media)
-    emit_checkpoint(reporter, "X_CONTEXT_WALK_DONE", total_posts=len(tweets), users=len(users), media=len(media), api_calls=client.call_count)
+    walk_context(state.client, seed_ids, state.tweets, state.users, state.media)
+    emit_checkpoint(
+        reporter,
+        "X_CONTEXT_WALK_DONE",
+        total_posts=len(state.tweets),
+        users=len(state.users),
+        media=len(state.media),
+        api_calls=state.client.call_count,
+    )
+    return seed_ids
 
-    conversation_ids: list[str] = []
+
+def discover_conversation_ids(
+    tweets: dict[str, dict],
+    options: XCaptureOptions,
+    context: XCaptureContext,
+) -> list[str]:
     if options.conversation_id:
-        conversation_ids = [options.conversation_id]
-    else:
-        for tweet in sorted(tweets.values(), key=lambda item: item.get("created_at") or "", reverse=True):
-            if tweet.get("author_id") != context.user_id:
-                continue
-            conv = tweet.get("conversation_id")
-            if conv and conv not in conversation_ids:
-                conversation_ids.append(conv)
-            if len(conversation_ids) >= options.max_threads:
-                break
-    emit_checkpoint(reporter, "THREAD_DISCOVERY_DONE", conversations=len(conversation_ids), cached=len(cached_conversation_ids))
+        return [options.conversation_id]
+    conversation_ids: list[str] = []
+    for tweet in sorted(tweets.values(), key=lambda item: item.get("created_at") or "", reverse=True):
+        if tweet.get("author_id") != context.user_id:
+            continue
+        conv = tweet.get("conversation_id")
+        if conv and conv not in conversation_ids:
+            conversation_ids.append(conv)
+        if len(conversation_ids) >= options.max_threads:
+            break
+    return conversation_ids
 
-    def has_new_tweets(conv_id: str) -> bool:
-        known = cached_tweet_ids.get(conv_id, set())
-        current = {tid for tid, tweet in tweets.items() if tweet.get("conversation_id") == conv_id}
-        return bool(current - known)
 
+def has_new_tweets(conv_id: str, tweets: dict[str, dict], cached_tweet_ids: dict[str, set[str]]) -> bool:
+    known = cached_tweet_ids.get(conv_id, set())
+    current = {tid for tid, tweet in tweets.items() if tweet.get("conversation_id") == conv_id}
+    return bool(current - known)
+
+
+def search_selected_conversations(
+    state: XCaptureState,
+    conversation_ids: list[str],
+    options: XCaptureOptions,
+    reporter: JobReporter | None,
+) -> dict[str, int]:
     search_counts: dict[str, int] = {}
     conversation_search_run = 0
     conversation_search_skipped = 0
     for conversation_id in conversation_ids:
-        if not options.force and conversation_id in cached_conversation_ids and not has_new_tweets(conversation_id):
+        if (
+            not options.force
+            and conversation_id in state.cached_conversation_ids
+            and not has_new_tweets(conversation_id, state.tweets, state.cached_tweet_ids)
+        ):
             search_counts[conversation_id] = 0
             conversation_search_skipped += 1
             continue
         conversation_search_run += 1
         emit_checkpoint(reporter, "X_CONVERSATION_SEARCH_START", conversation_id=conversation_id, pages=options.conversation_pages)
         search_counts[conversation_id] = search_conversation(
-            client, conversation_id, tweets, users, media, options.conversation_pages
+            state.client,
+            conversation_id,
+            state.tweets,
+            state.users,
+            state.media,
+            options.conversation_pages,
         )
-        conv_ids = [tweet_id for tweet_id, tweet in tweets.items() if tweet.get("conversation_id") == conversation_id]
-        walk_context(client, conv_ids, tweets, users, media)
+        conv_ids = [tweet_id for tweet_id, tweet in state.tweets.items() if tweet.get("conversation_id") == conversation_id]
+        walk_context(state.client, conv_ids, state.tweets, state.users, state.media)
         emit_checkpoint(
             reporter,
             "X_CONVERSATION_SEARCH_DONE",
             conversation_id=conversation_id,
             search_results=search_counts[conversation_id],
             conversation_posts=len(conv_ids),
-            api_calls=client.call_count,
+            api_calls=state.client.call_count,
         )
-    emit_checkpoint(reporter, "X_CONVERSATION_SEARCH_SUMMARY", searched=conversation_search_run, skipped_cached=conversation_search_skipped)
+    emit_checkpoint(
+        reporter,
+        "X_CONVERSATION_SEARCH_SUMMARY",
+        searched=conversation_search_run,
+        skipped_cached=conversation_search_skipped,
+    )
+    return search_counts
 
-    by_conversation: dict[str, list[dict]] = defaultdict(list)
+
+def assemble_conversations(
+    tweets: dict[str, dict],
+    conversation_ids: list[str],
+    context: XCaptureContext,
+) -> dict[str, list[dict]]:
+    by_conversation: dict[str, list[dict]] = {conversation_id: [] for conversation_id in conversation_ids}
     for tweet in tweets.values():
         conv = tweet.get("conversation_id")
-        if conv in conversation_ids:
+        if conv in by_conversation:
             by_conversation[conv].append(tweet)
     for conversation_id, items in list(by_conversation.items()):
         included_ids = {item.get("id") for item in items}
@@ -342,22 +409,42 @@ def run_live_x_capture(
                 if quoted and qid not in included_ids:
                     by_conversation[conversation_id].append(quoted)
                     included_ids.add(qid)
+    return by_conversation
 
-    entries: list[dict[str, Any]] = []
-    wanted_media_keys = {key for items in by_conversation.values() for item in items for key in media_keys(item)}
+
+def download_conversation_media(
+    paths: XCapturePaths,
+    conversations: dict[str, list[dict]],
+    media: dict[str, dict],
+    reporter: JobReporter | None,
+) -> dict[str, str]:
+    wanted_media_keys = {key for items in conversations.values() for item in items for key in media_keys(item)}
     emit_checkpoint(reporter, "MEDIA_DOWNLOAD_START", photos=len(wanted_media_keys))
     media_paths = download_photos(media, paths.media_dir, wanted_media_keys)
     emit_checkpoint(reporter, "MEDIA_DOWNLOAD_DONE", downloaded=len(media_paths), requested=len(wanted_media_keys))
+    return media_paths
+
+
+def write_conversation_records(
+    paths: XCapturePaths,
+    state: XCaptureState,
+    conversations: dict[str, list[dict]],
+    options: XCaptureOptions,
+    context: XCaptureContext,
+    media_paths: dict[str, str],
+    reporter: JobReporter | None,
+) -> tuple[list[dict[str, Any]], int]:
+    entries: list[dict[str, Any]] = []
     ignored_this_run = 0
-    emit_checkpoint(reporter, "THREAD_RECORD_WRITE_START", conversations=len(by_conversation), ai_enabled=False)
-    for conversation_id, items in by_conversation.items():
+    emit_checkpoint(reporter, "THREAD_RECORD_WRITE_START", conversations=len(conversations), ai_enabled=False)
+    for conversation_id, items in conversations.items():
         existing_record = find_cached_thread_record(paths.json_dir, conversation_id)
         existing_data = existing_record[1] if existing_record else {}
-        local_media = thread_local_media(media, items)
+        local_media = thread_local_media(state.media, items)
         local_media_paths = thread_local_media_paths(media_paths, items)
-        root_tweet = tweets.get(conversation_id)
+        root_tweet = state.tweets.get(conversation_id)
         created_at = thread_created_at(root_tweet, items)
-        title, slug = thread_title(root_tweet, items)
+        title, _slug = thread_title(root_tweet, items)
         op_tickers = root_post_tickers(root_tweet)
         metadata_tickers = root_primary_tickers(root_tweet)
         relevance_tickers = feed_conversation_tickers(root_tweet, items, context)
@@ -379,7 +466,7 @@ def run_live_x_capture(
                 **ticker_bucket_payload(op_tickers),
                 "tags": tags,
                 "tweets": items,
-                "users": users,
+                "users": state.users,
                 "media": local_media,
                 "media_paths": local_media_paths,
                 "non_photo_media": non_photo_media_placeholders(items, local_media, context),
@@ -416,7 +503,11 @@ def run_live_x_capture(
         filename = f"{prefix}__{label}__{slug}__{conversation_id}.html"
         html_path = paths.threads_dir / filename
         json_path = paths.json_dir / f"{prefix}__{label}__{slug}__{conversation_id}.json"
-        is_cached = not options.force and conversation_id in cached_conversation_ids and not has_new_tweets(conversation_id)
+        is_cached = (
+            not options.force
+            and conversation_id in state.cached_conversation_ids
+            and not has_new_tweets(conversation_id, state.tweets, state.cached_tweet_ids)
+        )
         cached_record = existing_record if is_cached else None
         if cached_record:
             cached_json_path, cached_data = cached_record
@@ -454,12 +545,12 @@ def run_live_x_capture(
                             "completeness_status": "conversation_search_partial",
                             "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                             "tweets": items,
-                            "users": users,
+                            "users": state.users,
                             "media": local_media,
                             "media_paths": local_media_paths,
                             "non_photo_media": non_photo_media_placeholders(items, local_media, context),
                             "feed": context.feed_record(kind="live_capture", raw_api_used=True, x_api_called=True),
-                            "rate_limits": client.rate_limits,
+                            "rate_limits": state.client.rate_limits,
                         },
                         analysis_metadata,
                     ),
@@ -502,16 +593,43 @@ def run_live_x_capture(
                 **context.feed_entry_fields(existing_data),
             }
         )
-
     emit_checkpoint(reporter, "THREAD_RECORD_WRITE_DONE", records=len(entries), ignored=ignored_this_run, ai_enabled=False)
-    usage = write_usage_estimate(paths.root, run_id, client)
+    return entries, ignored_this_run
+
+
+def run_live_x_capture(
+    paths: XCapturePaths,
+    run_id: str,
+    env_path: Path,
+    token: str,
+    options: XCaptureOptions,
+    context: XCaptureContext,
+    reporter: JobReporter | None = None,
+) -> dict[str, Any]:
+    state = initialize_capture_state(paths, env_path, token)
+    fetch_seed_context(state, options, context, reporter)
+    conversation_ids = discover_conversation_ids(state.tweets, options, context)
+    emit_checkpoint(reporter, "THREAD_DISCOVERY_DONE", conversations=len(conversation_ids), cached=len(state.cached_conversation_ids))
+    search_selected_conversations(state, conversation_ids, options, reporter)
+    conversations = assemble_conversations(state.tweets, conversation_ids, context)
+    media_paths = download_conversation_media(paths, conversations, state.media, reporter)
+    entries, ignored_this_run = write_conversation_records(
+        paths,
+        state,
+        conversations,
+        options,
+        context,
+        media_paths,
+        reporter,
+    )
+    usage = write_usage_estimate(paths.root, run_id, state.client)
     return {
         "threads": len(entries),
         "ignored": ignored_this_run,
         "raw_api_dir": portable_path(paths.raw_dir),
         "records_dir": portable_path(paths.json_dir),
         "media_dir": portable_path(paths.media_dir),
-        "api_calls": client.call_count,
+        "api_calls": state.client.call_count,
         "unique_post_reads_estimate": usage["unique_post_ids_returned"],
         "estimated_x_cost_usd": usage["estimated_cost_usd"],
         "ai_in_capture": False,
