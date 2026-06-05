@@ -1,1 +1,1 @@
-"""Screenshot feed connector."""
+"""Manual screenshot bundle ingest and reconstruction helpers."""

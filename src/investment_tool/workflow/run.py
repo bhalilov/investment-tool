@@ -1,4 +1,8 @@
-"""Top-level workflow and maintenance orchestrator."""
+"""Top-level workflow and maintenance orchestrator.
+
+This module coordinates stages only. Feed-specific implementation belongs in
+feed/context/presentation modules and is called through narrow adapters.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,8 @@ from investment_tool.runtime.reporting import start_reporter
 from investment_tool.feeds.x.jobs import main as main_x_job, run_x_action
 
 
+# Keep stage order explicit and boring. Scheduled update and manual rebuild have
+# different intent, so they get separate ordered lists instead of one clever DAG.
 UPDATE_STAGE_ORDER = ("x-capture", "screenshots", "prices", "descriptions", "render")
 REBUILD_STAGE_ORDER = ("x-raw", "screenshots", "prices", "descriptions", "render", "articles")
 ALL_STAGE_NAMES = tuple(dict.fromkeys((*UPDATE_STAGE_ORDER, *REBUILD_STAGE_ORDER)))

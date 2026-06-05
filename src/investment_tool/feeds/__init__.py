@@ -1,1 +1,1 @@
-"""External feed connectors."""
+"""Feed-specific capture and ingest modules."""

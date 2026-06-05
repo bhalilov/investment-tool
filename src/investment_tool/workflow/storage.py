@@ -1,4 +1,8 @@
-"""Runtime storage maintenance commands."""
+"""Runtime storage maintenance commands.
+
+This module performs local folder renames and path-string cleanup only. It does
+not capture data, run AI, or contact external APIs.
+"""
 
 from __future__ import annotations
 
@@ -48,6 +52,8 @@ def tree_stats(root: Path) -> dict[str, int]:
 
 
 def planned_mappings(paths: StoragePaths) -> list[StorageMapping]:
+    # Old runtime names are listed here so the cleanup remains auditable and
+    # repeatable. New code should use StoragePaths directly.
     legacy = paths.root
     mappings = [
         StorageMapping("x raw", legacy / "x_threads" / "raw_api", paths.x_raw),

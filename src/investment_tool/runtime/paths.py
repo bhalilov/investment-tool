@@ -1,4 +1,8 @@
-"""Canonical runtime storage paths."""
+"""Canonical runtime storage paths.
+
+All production code should resolve runtime paths through this module instead of
+hardcoding user-specific folders or old storage names.
+"""
 
 from __future__ import annotations
 
@@ -36,6 +40,8 @@ def default_data_root() -> Path:
 
 
 def runtime_data_root(value: str | Path | None = None) -> Path:
+    # One resolver keeps CLI flags, env vars, and portable tokens behaving the
+    # same way across capture, render, tests, and maintenance jobs.
     if value:
         text = str(value)
         if text == DATA_TOKEN or text.startswith(f"{DATA_TOKEN}/"):

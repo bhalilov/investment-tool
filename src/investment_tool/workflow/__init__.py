@@ -1,1 +1,1 @@
-"""Workflow orchestration package."""
+"""Coordinate-only workflow orchestration and maintenance commands."""

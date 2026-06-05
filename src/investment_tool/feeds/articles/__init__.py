@@ -1,1 +1,1 @@
-"""Saved article feed connector."""
+"""Saved article/archive feed ingest."""

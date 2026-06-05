@@ -1,1 +1,1 @@
-"""Canonical record shapes."""
+"""Future explicit canonical record definitions."""

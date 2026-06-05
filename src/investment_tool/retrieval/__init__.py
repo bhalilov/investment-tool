@@ -1,1 +1,1 @@
-"""Retrieval and vector integration."""
+"""Retrieval/search memory; current vector code is legacy."""

@@ -1,1 +1,1 @@
-"""Reusable parsing and filtering rules."""
+"""Feed-neutral ticker parsing and filtering rules."""

@@ -1,1 +1,1 @@
-"""HTML and presentation output."""
+"""Regenerable HTML pages and browse indexes."""

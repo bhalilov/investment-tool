@@ -1,1 +1,1 @@
-"""Command-line entrypoints."""
+"""Command entrypoints; parsing and dispatch only."""

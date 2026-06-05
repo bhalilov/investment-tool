@@ -1,4 +1,8 @@
-"""Live X capture stage and X-specific maintenance helpers."""
+"""Live X capture stage and X-specific maintenance helpers.
+
+This module stops at clean local evidence: raw API, records, and still-image
+media. Thread AI and vector sync intentionally live elsewhere.
+"""
 
 from __future__ import annotations
 
