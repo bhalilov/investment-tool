@@ -7,7 +7,6 @@ import datetime as dt
 import json
 import os
 import re
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -17,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.runtime.paths import portable_path
+from investment_tool.runtime.reporting import report_event
 
 
 API_BASE = "https://api.x.com/2"
@@ -112,11 +112,11 @@ def refresh_x_user_token(env_path: Path) -> str | None:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except Exception as exc:
-        print(f"WARN: X token refresh failed: {exc}", file=sys.stderr)
+        report_event("WARNING", "x-api", reason="token_refresh_failed", error=str(exc))
         return None
     access_token = data.get("access_token")
     if not access_token:
-        print("WARN: X token refresh response did not include access token", file=sys.stderr)
+        report_event("WARNING", "x-api", reason="token_refresh_missing_access_token")
         return None
     new_refresh = data.get("refresh_token") or refresh_token
     os.environ["X_USER_ACCESS_TOKEN"] = access_token
@@ -144,6 +144,11 @@ class XClient:
         self.call_count = 0
         self.rate_limits: list[dict[str, str | None]] = []
         self.post_ids_returned: set[str] = set()
+        try:
+            self.max_rate_limit_retries = max(0, int(os.environ.get("X_MAX_RATE_LIMIT_RETRIES", "3")))
+        except ValueError:
+            self.max_rate_limit_retries = 3
+            report_event("WARNING", "x-api", reason="invalid_max_rate_limit_retries", fallback=3)
 
     def get(self, path: str, params: dict[str, str | int] | None = None, label: str = "api") -> dict:
         return self._get(path, params, label, allow_refresh=True)
@@ -154,6 +159,7 @@ class XClient:
         params: dict[str, str | int] | None = None,
         label: str = "api",
         allow_refresh: bool = True,
+        rate_limit_retries: int = 0,
     ) -> dict:
         params = params or {}
         url = API_BASE + path
@@ -212,19 +218,53 @@ class XClient:
                 if reset and reset.isdigit()
                 else "unknown"
             )
-            print(
-                f"RATE_LIMIT_WAIT label={label} wait_seconds={wait_seconds} reset_at={reset_note}",
-                file=sys.stderr,
-                flush=True,
+            if rate_limit_retries >= self.max_rate_limit_retries:
+                report_event(
+                    "ERROR",
+                    "x-api",
+                    reason="rate_limit_retries_exhausted",
+                    label=label,
+                    status=status,
+                    retry=rate_limit_retries,
+                    max_retries=self.max_rate_limit_retries,
+                    reset_at=reset_note,
+                )
+                raise RuntimeError(
+                    f"X API rate limit retry limit reached for {label}: "
+                    f"{rate_limit_retries}/{self.max_rate_limit_retries}"
+                )
+            report_event(
+                "WAITING",
+                "x-api",
+                reason="rate_limit",
+                label=label,
+                wait_seconds=wait_seconds,
+                reset_at=reset_note,
+                retry=rate_limit_retries + 1,
+                max_retries=self.max_rate_limit_retries,
             )
             time.sleep(wait_seconds)
-            return self._get(path, params, f"{label}_retry_after_rate_limit", allow_refresh=allow_refresh)
+            return self._get(
+                path,
+                params,
+                f"{label}_retry_after_rate_limit",
+                allow_refresh=allow_refresh,
+                rate_limit_retries=rate_limit_retries + 1,
+            )
         if status == 401 and allow_refresh and self.refresh_callback:
             new_token = self.refresh_callback()
             if new_token:
                 self.token = new_token
                 return self._get(path, params, f"{label}_retry_after_refresh", allow_refresh=False)
         if status >= 400:
+            report_event(
+                "ERROR",
+                "x-api",
+                reason="http_error",
+                label=label,
+                status=status,
+                error=json.dumps(data, ensure_ascii=False)[:500],
+            )
             raise RuntimeError(f"X API error {status} for {label}: {json.dumps(data)[:500]}")
         return data
 
@@ -367,7 +407,7 @@ def download_photos(media: dict[str, dict], media_dir: Path, wanted_keys: set[st
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     path.write_bytes(resp.read())
             except Exception as exc:
-                print(f"WARN: Could not download media {key}: {exc}", file=sys.stderr)
+                report_event("WARNING", "x-api", reason="media_download_failed", media_key=key, error=str(exc))
                 continue
         if path.exists():
             paths[key] = portable_path(path)

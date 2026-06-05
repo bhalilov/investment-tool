@@ -1,4 +1,8 @@
+import contextlib
+import io
 import unittest
+import urllib.error
+from unittest.mock import patch
 
 from investment_tool.context import prices as market_prices
 
@@ -104,6 +108,33 @@ class PricesTests(unittest.TestCase):
     def test_selected_windows_deduplicates_or_defaults_to_all(self):
         self.assertEqual(market_prices.selected_windows(["daily", "daily", "hourly"]), ["daily", "hourly"])
         self.assertEqual(market_prices.selected_windows([]), ["daily", "hourly", "intraday"])
+
+    def test_provider_rate_limit_wait_and_failure_are_stdout_events(self):
+        def rate_limited(request, timeout=30):
+            raise urllib.error.HTTPError(
+                request.full_url,
+                429,
+                "Too Many Requests",
+                {},
+                io.BytesIO(b'{"error":"rate limited"}'),
+            )
+
+        stdout = io.StringIO()
+        with (
+            patch("urllib.request.urlopen", side_effect=rate_limited),
+            patch("time.sleep") as sleep,
+            contextlib.redirect_stdout(stdout),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 429"):
+                market_prices.request_json("https://provider.example/prices?apiKey=hidden", retries=2)
+
+        output = stdout.getvalue()
+        self.assertIn("WAITING", output)
+        self.assertIn("reason=provider_rate_limit", output)
+        self.assertIn("ERROR", output)
+        self.assertIn("reason=request_failed", output)
+        self.assertIn("url=https://provider.example/prices", output)
+        self.assertEqual(sleep.call_count, 1)
 
 
 if __name__ == "__main__":

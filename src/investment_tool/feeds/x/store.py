@@ -5,12 +5,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
 from investment_tool.presentation.indexes import render_all_indexes
 from investment_tool.runtime.paths import portable_path, resolve_portable_path
+from investment_tool.runtime.reporting import report_event
 from investment_tool.rules.tickers import ticker_bucket_payload
 from investment_tool.rules.filters import primary_label
 from investment_tool.feeds.x.context import XCaptureContext
@@ -46,6 +46,10 @@ from investment_tool.presentation.threads import date_prefix, render_thread_html
 DEFAULT_OWNED_POSITIONS_FILE = Path("config/owned_positions.json")
 
 
+def warn_json_read_failed(job: str, path: Path, exc: Exception, action: str) -> None:
+    report_event("WARNING", job, reason="json_read_failed", action=action, path=portable_path(path), error=str(exc))
+
+
 def load_cached_threads(
     json_dir: Path,
     tweets: dict[str, dict],
@@ -57,7 +61,8 @@ def load_cached_threads(
     for json_path in sorted(json_dir.glob("*.json")):
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            warn_json_read_failed("x-store", json_path, exc, "load_cached_threads")
             continue
         conv_id = data.get("conversation_id")
         if not conv_id:
@@ -77,7 +82,8 @@ def find_cached_thread_record(json_dir: Path, conversation_id: str) -> tuple[Pat
     for json_path in sorted(json_dir.glob(f"*__{conversation_id}.json")):
         try:
             return json_path, json.loads(json_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            warn_json_read_failed("x-store", json_path, exc, "find_cached_thread_record")
             continue
     return None
 
@@ -90,7 +96,8 @@ def cleanup_old_render_versions(json_dir: Path, threads_dir: Path, conversation_
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
             old_filename = data.get("canonical_filename")
-        except Exception:
+        except Exception as exc:
+            warn_json_read_failed("x-store", json_path, exc, "cleanup_old_render_versions")
             old_filename = None
         if old_filename:
             old_html = threads_dir / old_filename
@@ -117,7 +124,7 @@ def load_owned_tickers() -> set[str]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"WARN: Could not read owned positions file {path}: {exc}", file=sys.stderr)
+        report_event("WARNING", "x-store", reason="owned_positions_read_failed", path=portable_path(path), error=str(exc))
         return set()
     if isinstance(data, list):
         raw_tickers = data
@@ -181,7 +188,8 @@ def entries_from_cached_json(json_dir: Path, threads_dir: Path, context: XCaptur
     for json_path in sorted(json_dir.glob("*.json")):
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            warn_json_read_failed("x-store", json_path, exc, "entries_from_cached_json")
             continue
         conv_id = data.get("conversation_id")
         if not conv_id:
@@ -231,7 +239,8 @@ def apply_cached_relevance_gate(root: Path, json_dir: Path, threads_dir: Path, c
     for json_path in sorted(json_dir.glob("*.json")):
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            warn_json_read_failed("x-store", json_path, exc, "apply_cached_relevance_gate")
             continue
         conv_id = data.get("conversation_id")
         if not conv_id:
@@ -261,7 +270,8 @@ def rerender_cached_threads(
     for source_json_path in sorted(json_dir.glob("*.json")):
         try:
             data = json.loads(source_json_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            warn_json_read_failed("x-store", source_json_path, exc, "rerender_cached_threads")
             continue
         conv_id = data.get("conversation_id")
         if not conv_id or (conversation_id and conv_id != conversation_id):
@@ -418,7 +428,7 @@ def repair_cached_media_paths(json_dir: Path, backup_root: Path) -> dict[str, in
             stats["changed"] += 1
         except Exception as exc:
             stats["failed"] += 1
-            print(f"ERROR: Failed to repair media paths in {path}: {exc}", file=sys.stderr)
+            report_event("ERROR", "x-store", reason="repair_media_paths_failed", path=portable_path(path), error=str(exc))
     return stats
 
 

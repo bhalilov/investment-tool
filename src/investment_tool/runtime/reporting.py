@@ -177,6 +177,17 @@ def start_reporter(
     return reporter
 
 
+def report_event(event: str, job: str, **fields: Any) -> None:
+    """Emit a standalone operational event using the shared report-line format."""
+    payload = {
+        "vibe": random.choice(VIBE_WORDS),
+        "job": job,
+        "at": utc_now(),
+        **fields,
+    }
+    print(format_report_line(event, payload), flush=True)
+
+
 def cost_fields(model: str, fields: Mapping[str, Any]) -> dict[str, Any]:
     input_tokens = int(fields.get("input_tokens") or fields.get("openai_input_tokens") or 0)
     output_tokens = int(fields.get("output_tokens") or fields.get("openai_output_tokens") or 0)

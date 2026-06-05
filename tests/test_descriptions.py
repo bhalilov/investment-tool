@@ -1,7 +1,10 @@
+import contextlib
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from investment_tool.context import descriptions as media_analysis
 
@@ -54,6 +57,38 @@ class DescriptionsTests(unittest.TestCase):
         self.assertEqual(record["analysis_stage"], "media_visual_observation")
         self.assertEqual(record["authority"], "visual_extraction")
         self.assertTrue(record["ocr_or_description_only"])
+
+    def test_analysis_failure_is_reported_immediately_to_stdout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            media_dir = root / "media"
+            out_dir = root / "out"
+            media_dir.mkdir()
+            image = media_dir / "3_abc.jpg"
+            image.write_bytes(b"image-content")
+            args = [
+                "--media-dir",
+                str(media_dir),
+                "--output-dir",
+                str(out_dir),
+                "--env",
+                str(root / "missing.env"),
+                "--limit",
+                "1",
+            ]
+            stdout = io.StringIO()
+            with (
+                patch.object(media_analysis, "analyze_media_with_openai", side_effect=RuntimeError("boom")),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = media_analysis.main(args)
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn("WAITING", output)
+        self.assertIn("reason=openai_media_analysis", output)
+        self.assertIn("ERROR", output)
+        self.assertIn("error=boom", output)
 
 
 if __name__ == "__main__":

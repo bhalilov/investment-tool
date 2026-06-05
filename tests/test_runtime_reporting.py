@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from investment_tool.runtime.reporting import JobReporter, format_report_line
+from investment_tool.runtime.reporting import JobReporter, format_report_line, report_event
 
 
 class RuntimeReportingTests(unittest.TestCase):
@@ -30,6 +30,18 @@ class RuntimeReportingTests(unittest.TestCase):
         line = printed.call_args.args[0]
         self.assertIn("processed=1", line)
         self.assertIn("rows_written=10", line)
+
+    def test_report_event_uses_shared_stdout_format(self):
+        with patch("builtins.print") as printed:
+            report_event("WARNING", "x-api", reason="rate_limit", wait_seconds=5)
+
+        line = printed.call_args.args[0]
+        self.assertIn("WARNING ", line)
+        self.assertIn("job=x-api", line)
+        self.assertIn("reason=rate_limit", line)
+        self.assertIn("wait_seconds=5", line)
+        self.assertIn("at=", line)
+        self.assertNotIn("vibe=", line)
 
 
 if __name__ == "__main__":

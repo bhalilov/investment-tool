@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths_for_x_root
-from investment_tool.runtime.reporting import JobReporter
+from investment_tool.runtime.reporting import JobReporter, report_event
 from investment_tool.rules.filters import primary_label
 from investment_tool.rules.tickers import ticker_bucket_payload
 from investment_tool.feeds.x.context import XCaptureContext
@@ -206,7 +206,15 @@ def missing_media_metadata_targets(json_dir: Path, raw_media: dict[str, dict]) -
     for json_path in sorted(json_dir.glob("*.json")):
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            report_event(
+                "WARNING",
+                "x-capture",
+                reason="json_read_failed",
+                action="missing_media_metadata_targets",
+                path=portable_path(json_path),
+                error=str(exc),
+            )
             continue
         local_paths = data.get("media_paths") or {}
         if not isinstance(local_paths, dict):
@@ -630,7 +638,15 @@ def write_conversation_records(
                 captured_at = json.loads(json_path.read_text(encoding="utf-8")).get(
                     "captured_at", dt.datetime.now(dt.timezone.utc).isoformat()
                 )
-            except Exception:
+            except Exception as exc:
+                report_event(
+                    "WARNING",
+                    "x-capture",
+                    reason="json_read_failed",
+                    action="cached_capture_timestamp",
+                    path=portable_path(json_path),
+                    error=str(exc),
+                )
                 captured_at = dt.datetime.now(dt.timezone.utc).isoformat()
         else:
             captured_at = dt.datetime.now(dt.timezone.utc).isoformat()

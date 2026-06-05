@@ -10,7 +10,6 @@ import hashlib
 import json
 import mimetypes
 import os
-import sys
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -190,9 +189,11 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
                 print(f"Would analyze {path} -> {out_path}")
                 stats["skipped"] += 1
                 continue
+            reporter.emit("WAITING", reason="openai_media_analysis", path=path.name, timeout_seconds=90, model=model)
             analysis = analyze_media_with_openai(path, model, prompt["text"], schema)
             if not analysis:
                 stats["failed"] += 1
+                reporter.emit("ERROR", path=path.name, reason="missing_openai_api_key_or_empty_analysis")
                 continue
             analysis["input_fingerprint"] = media_fingerprint(path)
             stats["analyzed"] += 1
@@ -204,7 +205,7 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
             reporter.checkpoint_stats(stats, processed=stats["seen"], path=path.name)
         except Exception as exc:
             stats["failed"] += 1
-            print(f"ERROR: Failed to analyze media {path}: {exc}", file=sys.stderr)
+            reporter.emit("ERROR", path=path.name, error=str(exc), failed=stats["failed"])
     cost = estimate_openai_cost_usd(model, stats["input_tokens"], stats["output_tokens"])
     manifest = {
         "generated_at": iso_now(),

@@ -7,7 +7,6 @@ import argparse
 import datetime as dt
 import json
 import os
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -17,7 +16,7 @@ from typing import Any, Sequence
 
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, storage_paths
-from investment_tool.runtime.reporting import start_reporter
+from investment_tool.runtime.reporting import report_event, start_reporter
 
 
 DEFAULT_CONFIG = Path("config/market_price_universe.json")
@@ -89,10 +88,27 @@ def request_json(url: str, headers: dict[str, str] | None = None, retries: int =
             body = exc.read().decode("utf-8", errors="replace")
             if exc.code == 429 and attempt < retries - 1:
                 wait = 65
-                print(f"RATE_LIMIT_WAIT seconds={wait} url={url.split('?')[0]}", file=sys.stderr, flush=True)
+                report_event(
+                    "WAITING",
+                    "prices",
+                    reason="provider_rate_limit",
+                    wait_seconds=wait,
+                    url=url.split("?")[0],
+                    attempt=attempt + 1,
+                    retries=retries,
+                )
                 time.sleep(wait)
                 continue
+            report_event(
+                "ERROR",
+                "prices",
+                reason="request_failed",
+                status=exc.code,
+                url=url.split("?")[0],
+                error=body[:500],
+            )
             raise RuntimeError(f"HTTP {exc.code}: {body[:500]}") from exc
+    raise RuntimeError(f"request failed after {retries} retries: {url.split('?')[0]}")
 
 
 def massive_bars(
@@ -455,7 +471,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                     elapsed = time.monotonic() - last_massive
                     if elapsed < args.sleep:
                         wait = args.sleep - elapsed
-                        reporter.checkpoint_stats(stats, processed=stats["processed"], force=True, waiting_seconds=round(wait, 2), reason="provider_pacing")
+                        reporter.emit(
+                            "WAITING",
+                            reason="provider_pacing",
+                            wait_seconds=round(wait, 2),
+                            symbol=symbol,
+                            window=window,
+                        )
                         time.sleep(wait)
                     last_massive = time.monotonic()
                 try:
@@ -512,9 +534,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     }
                     manifest["errors"].append(error)
                     listing_record["windows"].append({**error, "rows": 0})
-                    print(f"ERROR {symbol} {window}: {exc}", file=sys.stderr)
                     stats["errors"] = len(manifest["errors"])
-                    reporter.checkpoint_stats(stats, processed=stats["processed"], force=True, symbol=symbol, window=window)
+                    reporter.emit("ERROR", symbol=symbol, window=window, market=market, error=str(exc))
+                    reporter.checkpoint_stats(
+                        stats,
+                        processed=stats["processed"],
+                        force=True,
+                        symbol=symbol,
+                        window=window,
+                        error=str(exc),
+                    )
             company_record["listings"].append(listing_record)
         manifest["companies"].append(company_record)
 
