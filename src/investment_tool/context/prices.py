@@ -35,6 +35,8 @@ WINDOWS = {
         "yahoo_interval": "1d",
         "storage_attr": "prices_daily",
         "lookback_days": None,
+        "incremental_overlap_days": 7,
+        "incremental_min_age_seconds": 6 * 60 * 60,
     },
     "hourly": {
         "massive_multiplier": 1,
@@ -42,6 +44,8 @@ WINDOWS = {
         "yahoo_interval": "1h",
         "storage_attr": "prices_hourly",
         "lookback_days": 7,
+        "incremental_overlap_days": 1,
+        "incremental_min_age_seconds": 50 * 60,
     },
     "intraday": {
         "massive_multiplier": 15,
@@ -49,6 +53,8 @@ WINDOWS = {
         "yahoo_interval": "15m",
         "storage_attr": "prices_intraday",
         "lookback_days": 2,
+        "incremental_overlap_days": 1,
+        "incremental_min_age_seconds": 10 * 60,
     },
 }
 
@@ -268,7 +274,8 @@ def convert_rows_to_usd(
         return converted, {"currency": "USD", "prices_converted_to_usd": False}
 
     if currency not in fx_cache:
-        fx_cache[currency] = fx_daily(str(currency), start, end)
+        fx_start = (parse_date(start) - dt.timedelta(days=7)).isoformat()
+        fx_cache[currency] = fx_daily(str(currency), fx_start, end)
     rates, fx_meta = fx_cache[currency]
     rate_dates = sorted(rates)
 
@@ -320,6 +327,85 @@ def row_bar_date(row: dict[str, Any]) -> str:
     if timestamp:
         return timestamp[:10]
     raise RuntimeError("Price row missing date/timestamp")
+
+
+def parse_optional_datetime(value: object) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
+
+
+def load_existing_price_payload(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def row_identity(row: dict[str, Any], window: str) -> str:
+    if window == "daily":
+        return row_bar_date(row)
+    return str(row.get("timestamp") or row_bar_date(row))
+
+
+def row_sort_key(row: dict[str, Any], window: str) -> str:
+    return row_identity(row, window)
+
+
+def merge_price_rows(existing_rows: list[dict[str, Any]], incoming_rows: list[dict[str, Any]], window: str, window_start: str) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for row in existing_rows + incoming_rows:
+        if not isinstance(row, dict):
+            continue
+        if row_bar_date(row) < window_start:
+            continue
+        merged[row_identity(row, window)] = row
+    return [merged[key] for key in sorted(merged, key=lambda key: row_sort_key(merged[key], window))]
+
+
+def latest_bar_date(rows: list[dict[str, Any]]) -> dt.date | None:
+    dates = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            dates.append(parse_date(row_bar_date(row)))
+        except Exception:
+            continue
+    return max(dates) if dates else None
+
+
+def incremental_fetch_start(existing_payload: dict[str, Any] | None, window: str, window_start: str) -> str:
+    if not existing_payload:
+        return window_start
+    rows = existing_payload.get("bars") or []
+    if not isinstance(rows, list):
+        return window_start
+    latest = latest_bar_date(rows)
+    if not latest:
+        return window_start
+    overlap = int(WINDOWS[window]["incremental_overlap_days"])
+    candidate = (latest - dt.timedelta(days=overlap)).isoformat()
+    return max(window_start, candidate)
+
+
+def is_incremental_fresh(existing_payload: dict[str, Any] | None, path: Path, window: str, now: dt.datetime) -> bool:
+    if not existing_payload:
+        return False
+    synced_at = parse_optional_datetime(existing_payload.get("synced_at"))
+    if not synced_at and path.exists():
+        synced_at = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc)
+    if not synced_at:
+        return False
+    age_seconds = (now - synced_at).total_seconds()
+    return age_seconds < int(WINDOWS[window]["incremental_min_age_seconds"])
 
 
 def should_try_massive(symbol: str, market: str) -> bool:
@@ -401,6 +487,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--limit-listings", type=int, default=0, help="Limit listing count for smoke tests.")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--sleep", type=float, default=13.0, help="Seconds between Massive requests.")
+    parser.add_argument("--incremental", action="store_true", help="Merge only due/missing recent bars instead of full window refresh.")
     args = parser.parse_args(argv)
 
     load_env(Path(args.env))
@@ -430,6 +517,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         listings=len(listing_pairs),
         massive_key_present=str(bool(api_key)).lower(),
         provider_usage_available="false",
+        incremental=str(bool(args.incremental)).lower(),
     )
     out_root = storage.prices_root
     for window in windows:
@@ -443,6 +531,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "config": portable_path(config_path.resolve()),
         "companies": [],
         "errors": [],
+        "incremental": bool(args.incremental),
     }
     last_massive = 0.0
     fx_cache: dict[str, tuple[dict[str, float], dict[str, Any]]] = {}
@@ -452,6 +541,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "massive_calls": 0,
         "yahoo_calls": 0,
         "errors": 0,
+        "skipped": 0,
     }
     wanted_ids = {(id(company), id(listing)) for company, listing in listing_pairs}
     for company in companies:
@@ -475,6 +565,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
             for window in windows:
                 window_start = window_start_date(window, start, end)
+                window_dir = getattr(storage, str(WINDOWS[window]["storage_attr"]))
+                out_path = window_dir / f"{safe_symbol(symbol)}.json"
+                existing_payload = load_existing_price_payload(out_path) if args.incremental else None
+                if args.incremental and is_incremental_fresh(existing_payload, out_path, window, dt.datetime.now(dt.timezone.utc)):
+                    existing_rows = (existing_payload or {}).get("bars") or []
+                    listing_record["windows"].append(
+                        {
+                            "window": window,
+                            "provider": (existing_payload or {}).get("provider"),
+                            "provider_interval": (existing_payload or {}).get("provider_interval"),
+                            "rows": len(existing_rows) if isinstance(existing_rows, list) else 0,
+                            "currency": (existing_payload or {}).get("currency"),
+                            "path": portable_path(out_path),
+                            "status": "skipped_fresh",
+                        }
+                    )
+                    stats["processed"] += 1
+                    stats["skipped"] += 1
+                    stats["errors"] = len(manifest["errors"])
+                    reporter.checkpoint_stats(
+                        stats,
+                        processed=stats["processed"],
+                        force=True,
+                        symbol=symbol,
+                        window=window,
+                        provider=(existing_payload or {}).get("provider"),
+                        rows=0,
+                        status="skipped_fresh",
+                    )
+                    continue
+                fetch_start = incremental_fetch_start(existing_payload, window, window_start) if args.incremental else window_start
                 if api_key and should_try_massive(symbol, market):
                     elapsed = time.monotonic() - last_massive
                     if elapsed < args.sleep:
@@ -489,11 +610,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                         time.sleep(wait)
                     last_massive = time.monotonic()
                 try:
-                    rows, meta = fetch_listing(symbol, market, window_start, end, api_key, window)
-                    rows, conversion_meta = convert_rows_to_usd(rows, meta.get("currency") or "USD", fx_cache, window_start, end)
+                    rows, meta = fetch_listing(symbol, market, fetch_start, end, api_key, window)
+                    rows, conversion_meta = convert_rows_to_usd(rows, meta.get("currency") or "USD", fx_cache, fetch_start, end)
                     meta.update(conversion_meta)
-                    window_dir = getattr(storage, str(WINDOWS[window]["storage_attr"]))
-                    out_path = window_dir / f"{safe_symbol(symbol)}.json"
+                    existing_rows = (existing_payload or {}).get("bars") or []
+                    if not isinstance(existing_rows, list):
+                        existing_rows = []
+                    output_rows = merge_price_rows(existing_rows, rows, window, window_start) if args.incremental else rows
                     payload = {
                         "company": company.get("name"),
                         "symbol": symbol,
@@ -501,9 +624,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "role": listing.get("role"),
                         "window": window,
                         "from": window_start,
+                        "fetch_from": fetch_start,
                         "to": end,
+                        "synced_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                        "incremental": bool(args.incremental),
                         **meta,
-                        "bars": rows,
+                        "bars": output_rows,
                     }
                     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
                     listing_record["windows"].append(
@@ -511,13 +637,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                             "window": window,
                             "provider": meta.get("provider"),
                             "provider_interval": meta.get("provider_interval"),
-                            "rows": len(rows),
+                            "rows": len(output_rows),
+                            "fetched_rows": len(rows),
                             "currency": meta.get("currency"),
                             "path": portable_path(out_path),
                         }
                     )
                     stats["processed"] += 1
-                    stats["rows_written"] += len(rows)
+                    stats["rows_written"] += len(output_rows)
                     if meta.get("provider") == "massive":
                         stats["massive_calls"] += 1
                     elif meta.get("provider") == "yahoo_chart":
@@ -529,7 +656,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                         symbol=symbol,
                         window=window,
                         provider=meta.get("provider"),
-                        rows=len(rows),
+                        rows=len(output_rows),
+                        fetched_rows=len(rows),
                     )
                 except Exception as exc:
                     stats["processed"] += 1
@@ -556,6 +684,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest["companies"].append(company_record)
 
     manifest_path = out_root / "manifest.json"
+    manifest["stats"] = dict(stats)
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     reporter.done_stats(
         stats,

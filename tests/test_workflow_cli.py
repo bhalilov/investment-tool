@@ -108,6 +108,40 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(result.status, "success")
         self.assertEqual(seen, [("prices", "investment_tool.context.prices")])
 
+    def test_workflow_update_passes_incremental_to_prices(self):
+        stage = WorkflowStage(
+            stage="prices",
+            module_id="prices",
+            platform="market_data",
+            kind="context_data",
+            entrypoint="investment_tool.context.prices",
+            feed_config="",
+            runner="module_main",
+            action="",
+            argv=(),
+        )
+
+        argv = workflow_run.resolve_stage_argv(stage, argparse.Namespace(command="update", force=False))
+
+        self.assertIn("--incremental", argv)
+
+    def test_workflow_rebuild_does_not_pass_incremental_to_prices(self):
+        stage = WorkflowStage(
+            stage="prices",
+            module_id="prices",
+            platform="market_data",
+            kind="context_data",
+            entrypoint="investment_tool.context.prices",
+            feed_config="",
+            runner="module_main",
+            action="",
+            argv=(),
+        )
+
+        argv = workflow_run.resolve_stage_argv(stage, argparse.Namespace(command="rebuild", force=False))
+
+        self.assertNotIn("--incremental", argv)
+
     def test_update_descriptions_scope_uses_latest_x_capture_media_keys(self):
         old_data_root = os.environ.get("INVESTMENT_TOOL_DATA_DIR")
         with tempfile.TemporaryDirectory() as tmp:

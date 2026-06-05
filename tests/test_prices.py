@@ -1,7 +1,11 @@
 import contextlib
+import datetime as dt
 import io
+import json
+import tempfile
 import unittest
 import urllib.error
+from pathlib import Path
 from unittest.mock import patch
 
 from investment_tool.context import prices as market_prices
@@ -118,6 +122,41 @@ class PricesTests(unittest.TestCase):
         self.assertEqual(converted[0]["timestamp"], "2026-06-04T14:30:00+00:00")
         self.assertAlmostEqual(converted[0]["close"], 115.5)
 
+    def test_incremental_fetch_start_uses_latest_bar_with_overlap(self):
+        payload = {
+            "bars": [
+                {"date": "2026-06-01", "close": 1},
+                {"date": "2026-06-05", "close": 2},
+            ]
+        }
+
+        self.assertEqual(
+            market_prices.incremental_fetch_start(payload, "daily", "2026-03-01"),
+            "2026-05-29",
+        )
+
+    def test_incremental_fresh_uses_synced_at_or_file_mtime(self):
+        now = dt.datetime(2026, 6, 5, 17, 0, tzinfo=dt.timezone.utc)
+        payload = {"synced_at": "2026-06-05T16:55:00+00:00", "bars": []}
+
+        self.assertTrue(market_prices.is_incremental_fresh(payload, Path("/tmp/nope.json"), "intraday", now))
+        self.assertFalse(market_prices.is_incremental_fresh(payload, Path("/tmp/nope.json"), "hourly", now + dt.timedelta(hours=2)))
+
+    def test_merge_price_rows_dedupes_and_trims_window(self):
+        existing = [
+            {"date": "2026-05-28", "close": 1},
+            {"date": "2026-06-01", "close": 2},
+        ]
+        incoming = [
+            {"date": "2026-06-01", "close": 3},
+            {"date": "2026-06-02", "close": 4},
+        ]
+
+        merged = market_prices.merge_price_rows(existing, incoming, "daily", "2026-06-01")
+
+        self.assertEqual([row["date"] for row in merged], ["2026-06-01", "2026-06-02"])
+        self.assertEqual(merged[0]["close"], 3)
+
     def test_window_start_dates_use_configured_lookbacks(self):
         self.assertEqual(market_prices.window_start_date("daily", "2026-03-01", "2026-06-05"), "2026-03-01")
         self.assertEqual(market_prices.window_start_date("hourly", "2026-03-01", "2026-06-05"), "2026-05-29")
@@ -153,6 +192,61 @@ class PricesTests(unittest.TestCase):
         self.assertIn("reason=request_failed", output)
         self.assertIn("url=https://provider.example/prices", output)
         self.assertEqual(sleep.call_count, 1)
+
+    def test_incremental_skips_fresh_existing_price_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "config.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "start_date": "2026-03-01",
+                        "companies": [
+                            {
+                                "name": "Test",
+                                "primary": "TEST",
+                                "listings": [{"symbol": "TEST", "market": "US", "role": "primary"}],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            out = root / "context" / "prices" / "intraday" / "TEST.json"
+            out.parent.mkdir(parents=True)
+            out.write_text(
+                json.dumps(
+                    {
+                        "synced_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                        "provider": "fixture",
+                        "provider_interval": "15/minute",
+                        "currency": "USD",
+                        "bars": [{"date": "2026-06-05", "timestamp": "2026-06-05T16:45:00+00:00", "close": 1}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            with (
+                patch.object(market_prices, "fetch_listing", side_effect=AssertionError("should not fetch")),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = market_prices.main(
+                    [
+                        "--config",
+                        str(config),
+                        "--data-dir",
+                        str(root),
+                        "--window",
+                        "intraday",
+                        "--incremental",
+                        "--env",
+                        str(root / "missing.env"),
+                    ]
+                )
+
+        self.assertEqual(code, 0)
+        self.assertIn("status=skipped_fresh", stdout.getvalue())
 
 
 if __name__ == "__main__":

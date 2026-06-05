@@ -228,13 +228,16 @@ def run_screenshots_stage(stage: WorkflowStage, args: argparse.Namespace) -> int
     return screenshot_bundles.main(argv)
 
 
-def resolve_stage_argv(stage: WorkflowStage) -> list[str]:
-    return [item.replace("{feed_config}", stage.feed_config) for item in stage.argv]
+def resolve_stage_argv(stage: WorkflowStage, args: argparse.Namespace) -> list[str]:
+    argv = [item.replace("{feed_config}", stage.feed_config) for item in stage.argv]
+    if stage.stage == "prices" and getattr(args, "command", "") in {"update", "sync", "refresh"} and not getattr(args, "force", False):
+        argv.append("--incremental")
+    return argv
 
 
-def run_module_main_stage(stage: WorkflowStage, _: argparse.Namespace) -> int:
+def run_module_main_stage(stage: WorkflowStage, args: argparse.Namespace) -> int:
     module = importlib.import_module(stage.entrypoint)
-    return int(module.main(resolve_stage_argv(stage)))
+    return int(module.main(resolve_stage_argv(stage, args)))
 
 
 def run_x_action_stage(stage: WorkflowStage, args: argparse.Namespace) -> int:
