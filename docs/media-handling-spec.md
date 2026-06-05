@@ -40,11 +40,11 @@ Current fields include:
 
 - media key and path;
 - file metadata and hash;
-- source identity;
+- feed identity;
 - model;
 - `analysis_stage = media_visual_observation`;
 - `ocr_or_description_only = true`;
 - model analysis payload.
 
 Media description is visual extraction only. It must not infer trading action or
-source-account intent.
+feed-account intent.

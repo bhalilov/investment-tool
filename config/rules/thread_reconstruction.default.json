@@ -1,11 +1,11 @@
 {
   "version": 1,
   "ruleset_id": "thread_reconstruction.default",
-  "include_root_posts_by_source": true,
-  "include_replies_by_source": true,
-  "include_parent_question_for_source_reply": true,
+  "include_root_posts_by_feed": true,
+  "include_replies_by_feed": true,
+  "include_parent_question_for_feed_reply": true,
   "include_random_user_replies": false,
-  "include_quotes_from_source_posts": true,
+  "include_quotes_from_feed_posts": true,
   "include_quotes_from_parent_questions": true,
   "include_explicit_linked_posts": true,
   "parent_chain_depth": 20,
@@ -26,8 +26,8 @@
     "hardcore channel"
   ],
   "thread_type_labels": {
-    "source_started_thread": "SOURCE_THREAD",
-    "source_reply_context": "SOURCE_REPLY_CONTEXT",
+    "feed_started_thread": "FEED_THREAD",
+    "feed_reply_context": "FEED_REPLY_CONTEXT",
     "linked_context": "LINKED_CONTEXT"
   }
 }

@@ -1,4 +1,4 @@
-"""Source, rule, model, and prompt configuration helpers."""
+"""Feed, rule, model, and prompt configuration helpers."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_X_SOURCES_CONFIG = PROJECT_ROOT / "config" / "sources" / "x_accounts.json"
+DEFAULT_X_FEEDS_CONFIG = PROJECT_ROOT / "config" / "feeds" / "x_accounts.json"
 
 
 @dataclass(frozen=True)
-class SourceProfile:
-    source_id: str
+class FeedProfile:
+    feed_id: str
     platform: str
     module: str
     username: str
@@ -29,12 +29,12 @@ class SourceProfile:
 
 
 @dataclass(frozen=True)
-class SourceModule:
+class FeedModule:
     module_id: str
     platform: str
     kind: str
     entrypoint: str
-    source_config: str
+    feed_config: str
     supports: tuple[str, ...]
 
 
@@ -55,44 +55,44 @@ def file_sha256(path: str | Path) -> str:
     return hashlib.sha256(project_path(path).read_bytes()).hexdigest()
 
 
-def load_x_source_profile(config_path: str | Path = DEFAULT_X_SOURCES_CONFIG, source_id: str = "") -> SourceProfile:
+def load_x_feed_profile(config_path: str | Path = DEFAULT_X_FEEDS_CONFIG, feed_id: str = "") -> FeedProfile:
     config = read_json(config_path)
-    wanted = source_id or str(config.get("default_source_id") or "")
-    sources = config.get("sources") or []
-    source = next((item for item in sources if item.get("source_id") == wanted), None)
-    if not source:
-        raise ValueError(f"Source profile not found: {wanted or '<default>'}")
-    account = source.get("account") or {}
-    storage = source.get("storage") or {}
-    return SourceProfile(
-        source_id=str(source.get("source_id") or wanted),
-        platform=str(source.get("platform") or "x"),
-        module=str(source.get("module") or "x-capture"),
+    wanted = feed_id or str(config.get("default_feed_id") or "")
+    feeds = config.get("feeds") or []
+    feed = next((item for item in feeds if item.get("feed_id") == wanted), None)
+    if not feed:
+        raise ValueError(f"Feed profile not found: {wanted or '<default>'}")
+    account = feed.get("account") or {}
+    storage = feed.get("storage") or {}
+    return FeedProfile(
+        feed_id=str(feed.get("feed_id") or wanted),
+        platform=str(feed.get("platform") or "x"),
+        module=str(feed.get("module") or "x-capture"),
         username=str(account.get("username") or "").lstrip("@"),
         user_id=str(account.get("user_id") or ""),
         display_name=str(account.get("display_name") or account.get("username") or ""),
         data_root=str(storage.get("data_root") or ""),
         alternate_usernames=tuple(str(item).lstrip("@") for item in account.get("alternate_usernames") or []),
-        thread_rules_path=project_path(source.get("thread_rules") or "config/rules/thread_reconstruction.default.json"),
-        media_rules_path=project_path(source.get("media_rules") or "config/rules/media.default.json"),
-        user_specifics=dict(source.get("user_specifics") or {}),
+        thread_rules_path=project_path(feed.get("thread_rules") or "config/rules/thread_reconstruction.default.json"),
+        media_rules_path=project_path(feed.get("media_rules") or "config/rules/media.default.json"),
+        user_specifics=dict(feed.get("user_specifics") or {}),
     )
 
 
-def load_source_rules(profile: SourceProfile) -> tuple[dict[str, Any], dict[str, Any]]:
+def load_feed_rules(profile: FeedProfile) -> tuple[dict[str, Any], dict[str, Any]]:
     return read_json(profile.thread_rules_path), read_json(profile.media_rules_path)
 
 
-def load_source_modules(path: str | Path = "config/source_modules.json") -> dict[str, SourceModule]:
+def load_feed_modules(path: str | Path = "config/feed_modules.json") -> dict[str, FeedModule]:
     config = read_json(path)
-    modules: dict[str, SourceModule] = {}
+    modules: dict[str, FeedModule] = {}
     for item in config.get("modules") or []:
-        module = SourceModule(
+        module = FeedModule(
             module_id=str(item.get("module_id") or ""),
             platform=str(item.get("platform") or ""),
             kind=str(item.get("kind") or ""),
             entrypoint=str(item.get("entrypoint") or ""),
-            source_config=str(item.get("source_config") or ""),
+            feed_config=str(item.get("feed_config") or ""),
             supports=tuple(str(value) for value in item.get("supports") or []),
         )
         if module.module_id:
@@ -113,9 +113,9 @@ def load_prompt(path: str | Path) -> dict[str, str]:
     return {"path": str(resolved), "sha256": file_sha256(resolved), "text": resolved.read_text(encoding="utf-8")}
 
 
-def source_profile_for_prompt(profile: SourceProfile) -> dict[str, Any]:
+def feed_profile_for_prompt(profile: FeedProfile) -> dict[str, Any]:
     return {
-        "source_id": profile.source_id,
+        "feed_id": profile.feed_id,
         "platform": profile.platform,
         "username": profile.username,
         "user_id": profile.user_id,
@@ -125,9 +125,9 @@ def source_profile_for_prompt(profile: SourceProfile) -> dict[str, Any]:
     }
 
 
-def source_identity(profile: SourceProfile) -> dict[str, Any]:
+def feed_identity(profile: FeedProfile) -> dict[str, Any]:
     return {
-        "source_id": profile.source_id,
+        "feed_id": profile.feed_id,
         "platform": profile.platform,
         "module": profile.module,
         "username": profile.username,
@@ -137,8 +137,8 @@ def source_identity(profile: SourceProfile) -> dict[str, Any]:
     }
 
 
-def source_label(profile: SourceProfile) -> str:
-    username = f"@{profile.username}" if profile.username else profile.user_id or profile.source_id
+def feed_label(profile: FeedProfile) -> str:
+    username = f"@{profile.username}" if profile.username else profile.user_id or profile.feed_id
     if profile.display_name and profile.display_name != profile.username:
         return f"{profile.display_name} ({username})"
     return username

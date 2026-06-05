@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe X thread capture for a configured source account, replies, and image media."""
+"""Probe X thread capture for a configured feed account, replies, and image media."""
 
 from __future__ import annotations
 
@@ -21,21 +21,21 @@ if SRC_DIR.exists() and str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.config import SourceProfile, load_x_source_profile
+from investment_tool.runtime.config import FeedProfile, load_x_feed_profile
 from investment_tool.runtime.paths import resolve_portable_path, storage_paths
 
 
 API_BASE = "https://api.x.com/2"
-SOURCE_PROFILE: SourceProfile = load_x_source_profile()
-SOURCE_USERNAME = SOURCE_PROFILE.username
-SOURCE_USER_ID = SOURCE_PROFILE.user_id
+FEED_PROFILE: FeedProfile = load_x_feed_profile()
+FEED_USERNAME = FEED_PROFILE.username
+FEED_USER_ID = FEED_PROFILE.user_id
 
 
-def configure_source(profile: SourceProfile) -> None:
-    global SOURCE_PROFILE, SOURCE_USERNAME, SOURCE_USER_ID
-    SOURCE_PROFILE = profile
-    SOURCE_USERNAME = profile.username
-    SOURCE_USER_ID = profile.user_id
+def configure_feed(profile: FeedProfile) -> None:
+    global FEED_PROFILE, FEED_USERNAME, FEED_USER_ID
+    FEED_PROFILE = profile
+    FEED_USERNAME = profile.username
+    FEED_USER_ID = profile.user_id
 
 TWEET_FIELDS = ",".join(
     [
@@ -172,7 +172,7 @@ def merge_response(
         media[item["media_key"]] = item
 
 
-def fetch_source_timeline(client: XClient, max_pages: int) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict]]:
+def fetch_feed_timeline(client: XClient, max_pages: int) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict]]:
     tweets: dict[str, dict] = {}
     users: dict[str, dict] = {}
     media: dict[str, dict] = {}
@@ -181,7 +181,7 @@ def fetch_source_timeline(client: XClient, max_pages: int) -> tuple[dict[str, di
         params = tweet_params(max_results=100)
         if pagination_token:
             params["pagination_token"] = pagination_token
-        response = client.get(f"/users/{SOURCE_USER_ID}/tweets", params, f"source_timeline_page_{page + 1}")
+        response = client.get(f"/users/{FEED_USER_ID}/tweets", params, f"feed_timeline_page_{page + 1}")
         merge_response(response, tweets, users, media)
         pagination_token = (response.get("meta") or {}).get("next_token")
         if not pagination_token:
@@ -294,7 +294,7 @@ def download_photos(media: dict[str, dict], out_dir: Path) -> dict[str, Path]:
 
 
 def tweet_url(tweet_id: str) -> str:
-    return f"https://x.com/{SOURCE_USERNAME}/status/{tweet_id}"
+    return f"https://x.com/{FEED_USERNAME}/status/{tweet_id}"
 
 
 def render_html(
@@ -306,7 +306,7 @@ def render_html(
     downloaded: dict[str, Path],
     conversation_search_counts: dict[str, int],
     rate_limits: list[dict[str, str | None]],
-    source_timeline_pages: int,
+    feed_timeline_pages: int,
 ) -> None:
     by_conv: dict[str, list[dict]] = {conv: [] for conv in conversations}
     for tweet in tweets.values():
@@ -322,25 +322,25 @@ def render_html(
     sections: list[str] = []
     for conv_id in conversations:
         items = sorted(by_conv[conv_id], key=lambda item: item.get("created_at") or "")
-        source_count = sum(1 for item in items if item.get("author_id") == SOURCE_USER_ID)
+        feed_count = sum(1 for item in items if item.get("author_id") == FEED_USER_ID)
         photo_count = sum(1 for item in items if has_photo(item, media))
         section = [
             f"<section><h2>Conversation {html.escape(conv_id)}</h2>",
             "<div class='meta'>",
             f"<strong>Total captured posts:</strong> {len(items)} &nbsp; ",
-            f"<strong>Source posts captured:</strong> {source_count} &nbsp; ",
+            f"<strong>Feed posts captured:</strong> {feed_count} &nbsp; ",
             f"<strong>Posts with photos:</strong> {photo_count} &nbsp; ",
             f"<strong>Conversation-search results:</strong> {conversation_search_counts.get(conv_id, 0)}",
             "</div>",
             (
-                "<p class='warning'>Completeness note: this report combines source timeline polling, direct parent-chain lookups, "
-                "and conversation search. X conversation search may omit protected source replies, so compare against x.com.</p>"
+                "<p class='warning'>Completeness note: this report combines feed timeline polling, direct parent-chain lookups, "
+                "and conversation search. X conversation search may omit protected feed replies, so compare against x.com.</p>"
             ),
         ]
         for item in items:
             refs = item.get("referenced_tweets") or []
             ref_text = ", ".join(f"{ref.get('type')}:{ref.get('id')}" for ref in refs) or "none"
-            classes = "tweet source" if item.get("author_id") == SOURCE_USER_ID else "tweet"
+            classes = "tweet feed" if item.get("author_id") == FEED_USER_ID else "tweet"
             metrics = item.get("public_metrics") or {}
             note_badge = " | full note_tweet rendered" if (item.get("note_tweet") or {}).get("text") else ""
             metrics_text = (
@@ -398,7 +398,7 @@ def render_html(
     .meta, .tweet-id, .media-meta {{ color: #536471; font-size: 13px; }}
     .warning {{ background: #fff6cc; border: 1px solid #ead36a; padding: 10px 12px; border-radius: 6px; }}
     .tweet {{ border: 1px solid #d8e0e8; border-radius: 8px; padding: 14px; margin: 14px 0; max-width: 980px; }}
-    .tweet.source {{ border-left: 5px solid #1d9bf0; }}
+    .tweet.feed {{ border-left: 5px solid #1d9bf0; }}
     .tweet-head {{ display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }}
     .tweet p {{ white-space: pre-wrap; line-height: 1.42; }}
     img {{ display: block; max-width: 900px; max-height: 760px; margin-top: 10px; border: 1px solid #ccd6dd; }}
@@ -408,7 +408,7 @@ def render_html(
 </head>
 <body>
   <h1>X Thread Media Probe</h1>
-  <p class="meta">Generated {html.escape(dt.datetime.now().isoformat(timespec="seconds"))}. Source timeline pages fetched: {source_timeline_pages}.</p>
+  <p class="meta">Generated {html.escape(dt.datetime.now().isoformat(timespec="seconds"))}. Feed timeline pages fetched: {feed_timeline_pages}.</p>
   <p class="warning">Purpose: compare these reconstructed threads against x.com for missing replies/media before building alerts.</p>
   {''.join(sections)}
   <section>
@@ -427,8 +427,8 @@ def render_html(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
-    parser.add_argument("--source-id", default="")
+    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-id", default="")
     parser.add_argument("--threads", type=int, default=3)
     parser.add_argument("--timeline-pages", type=int, default=3)
     parser.add_argument("--conversation-pages", type=int, default=5)
@@ -438,7 +438,7 @@ def main() -> int:
 
     repo_env = Path(__file__).resolve().parents[1] / ".env"
     load_env(repo_env)
-    configure_source(load_x_source_profile(args.source_config, args.source_id))
+    configure_feed(load_x_feed_profile(args.feed_config, args.feed_id))
     token = os.environ.get("X_USER_ACCESS_TOKEN", "").strip()
     if not token:
         print("Missing X_USER_ACCESS_TOKEN in .env", file=sys.stderr)
@@ -453,10 +453,10 @@ def main() -> int:
     media_dir.mkdir(parents=True, exist_ok=True)
 
     client = XClient(token, raw_dir)
-    tweets, users, media = fetch_source_timeline(client, args.timeline_pages)
+    tweets, users, media = fetch_feed_timeline(client, args.timeline_pages)
 
-    source_seed_ids = [tweet_id for tweet_id, tweet in tweets.items() if tweet.get("author_id") == SOURCE_USER_ID]
-    walk_parent_chains(client, source_seed_ids, tweets, users, media)
+    feed_seed_ids = [tweet_id for tweet_id, tweet in tweets.items() if tweet.get("author_id") == FEED_USER_ID]
+    walk_parent_chains(client, feed_seed_ids, tweets, users, media)
 
     conversation_ids: list[str] = []
     if args.conversation_id:

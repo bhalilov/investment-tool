@@ -4,35 +4,35 @@ from investment_tool.runtime.config import (
     load_model_registry,
     load_pipeline_registry,
     load_prompt,
-    load_source_modules,
-    load_source_rules,
-    load_x_source_profile,
+    load_feed_modules,
+    load_feed_rules,
+    load_x_feed_profile,
     project_path,
     read_json,
-    source_label,
+    feed_label,
 )
 
 
-class SourceConfigTests(unittest.TestCase):
-    def test_x_source_profile_loads_default_account(self):
-        profile = load_x_source_profile()
+class FeedConfigTests(unittest.TestCase):
+    def test_x_feed_profile_loads_default_account(self):
+        profile = load_x_feed_profile()
 
         self.assertEqual(profile.platform, "x")
         self.assertEqual(profile.module, "x-capture")
         self.assertTrue(profile.username)
         self.assertTrue(profile.user_id)
-        self.assertIn("@", source_label(profile))
+        self.assertIn("@", feed_label(profile))
 
-    def test_source_rules_load_from_profile_paths(self):
-        profile = load_x_source_profile()
-        thread_rules, media_rules = load_source_rules(profile)
+    def test_feed_rules_load_from_profile_paths(self):
+        profile = load_x_feed_profile()
+        thread_rules, media_rules = load_feed_rules(profile)
 
         self.assertIn("thread_type_labels", thread_rules)
         self.assertIn("placeholder_types", media_rules)
         self.assertIn("video", media_rules["placeholder_types"])
 
-    def test_source_modules_are_discoverable(self):
-        modules = load_source_modules()
+    def test_feed_modules_are_discoverable(self):
+        modules = load_feed_modules()
 
         self.assertIn("x-capture", modules)
         self.assertIn("prices", modules)

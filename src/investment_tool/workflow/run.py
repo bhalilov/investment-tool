@@ -14,7 +14,7 @@ from typing import Sequence
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
-from investment_tool.sources.x.jobs import main as main_x_job, run_x_action
+from investment_tool.feeds.x.jobs import main as main_x_job, run_x_action
 
 
 UPDATE_STAGE_ORDER = ("x-capture", "screenshots", "prices", "descriptions", "render")
@@ -107,9 +107,9 @@ def write_workflow_log(
     return log_path
 
 
-def add_workflow_source_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
-    parser.add_argument("--source-id", default="")
+def add_workflow_feed_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-id", default="")
 
 
 def add_workflow_x_args(parser: argparse.ArgumentParser) -> None:
@@ -124,7 +124,7 @@ def add_workflow_run_args(parser: argparse.ArgumentParser, stages: Sequence[str]
     parser.add_argument("--dry-run", action="store_true", help="Plan and report without API calls or data writes.")
     parser.add_argument("--force", action="store_true", help="Run selected stages even when local outputs already exist.")
     parser.add_argument("--max-runtime-minutes", type=int, default=0, help="Stop starting new stages after this many minutes.")
-    add_workflow_source_args(parser)
+    add_workflow_feed_args(parser)
     add_workflow_x_args(parser)
 
 
@@ -146,7 +146,7 @@ def build_workflow_parser() -> argparse.ArgumentParser:
 
     for command in ("check", "doctor"):
         check = subparsers.add_parser(command, help="Run read-only workflow health checks.")
-        add_workflow_source_args(check)
+        add_workflow_feed_args(check)
 
     return parser
 
@@ -167,8 +167,8 @@ def selected_stages(args: argparse.Namespace) -> list[str]:
 
 def workflow_x_namespace(args: argparse.Namespace, **extra: object) -> argparse.Namespace:
     values = {
-        "source_config": getattr(args, "source_config", "config/sources/x_accounts.json"),
-        "source_id": getattr(args, "source_id", ""),
+        "feed_config": getattr(args, "feed_config", "config/feeds/x_accounts.json"),
+        "feed_id": getattr(args, "feed_id", ""),
         "timeline_pages": getattr(args, "timeline_pages", 3),
         "conversation_pages": getattr(args, "conversation_pages", 0),
         "max_threads": getattr(args, "max_threads", 20),
@@ -189,7 +189,7 @@ def screenshot_inbox_paths() -> list[Path]:
 
 
 def run_screenshots_stage(args: argparse.Namespace) -> int:
-    from investment_tool.sources.screenshots import bundles as screenshot_bundles
+    from investment_tool.feeds.screenshots import bundles as screenshot_bundles
 
     paths = screenshot_inbox_paths()
     if not paths:
@@ -201,10 +201,10 @@ def run_screenshots_stage(args: argparse.Namespace) -> int:
         [
             "--output-dir",
             portable_path(storage_paths().screenshots_root),
-            "--source-config",
-            getattr(args, "source_config", "config/sources/x_accounts.json"),
-            "--source-id",
-            getattr(args, "source_id", ""),
+            "--feed-config",
+            getattr(args, "feed_config", "config/feeds/x_accounts.json"),
+            "--feed-id",
+            getattr(args, "feed_id", ""),
             "--analyze",
         ]
     )
@@ -232,10 +232,10 @@ def run_stage(stage: str, args: argparse.Namespace) -> StageResult:
             from investment_tool.context import descriptions
 
             description_args = [
-                "--source-config",
-                getattr(args, "source_config", "config/sources/x_accounts.json"),
-                "--source-id",
-                getattr(args, "source_id", ""),
+                "--feed-config",
+                getattr(args, "feed_config", "config/feeds/x_accounts.json"),
+                "--feed-id",
+                getattr(args, "feed_id", ""),
             ]
             if getattr(args, "force", False):
                 description_args.append("--force")
@@ -243,13 +243,13 @@ def run_stage(stage: str, args: argparse.Namespace) -> StageResult:
         elif stage == "screenshots":
             code = run_screenshots_stage(args)
         elif stage == "articles":
-            from investment_tool.sources.articles import ingest as articles_ingest
+            from investment_tool.feeds.articles import ingest as articles_ingest
 
             article_args = [
-                "--source-config",
-                getattr(args, "source_config", "config/sources/x_accounts.json"),
-                "--source-id",
-                getattr(args, "source_id", ""),
+                "--feed-config",
+                getattr(args, "feed_config", "config/feeds/x_accounts.json"),
+                "--feed-id",
+                getattr(args, "feed_id", ""),
             ]
             if getattr(args, "force", False):
                 article_args.append("--force-ai")

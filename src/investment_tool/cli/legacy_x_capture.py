@@ -1,17 +1,17 @@
 """Compatibility wrapper for the legacy X capture entrypoint.
 
 The production workflow now lives in ``workflow.run`` and the X implementation
-lives under ``sources.x``. This module preserves the old entrypoint and selected
-helper imports while callers migrate.
+lives under ``feeds.x``. This module preserves the old entrypoint and selected
+helper imports while callers transition.
 """
 
 from __future__ import annotations
 
 from typing import Sequence
 
-from investment_tool.sources.x.jobs import main_legacy_x_capture
-from investment_tool.sources.x.context import load_x_capture_context
-from investment_tool.sources.x.capture import (
+from investment_tool.feeds.x.jobs import main_legacy_x_capture
+from investment_tool.feeds.x.context import load_x_capture_context
+from investment_tool.feeds.x.capture import (
     XCaptureOptions,
     XCapturePaths,
     data_root,
@@ -22,7 +22,7 @@ from investment_tool.sources.x.capture import (
     walk_context,
     write_usage_estimate,
 )
-from investment_tool.sources.x.metadata import (
+from investment_tool.feeds.x.metadata import (
     analysis_field_payload,
     apply_pending_safe_summary,
     base_thread_metadata,
@@ -38,20 +38,20 @@ from investment_tool.sources.x.metadata import (
     root_primary_tickers,
     rough_tldr as _rough_tldr,
     safe_slug,
-    source_conversation_tickers as _source_conversation_tickers,
+    feed_conversation_tickers as _feed_conversation_tickers,
     thread_created_at,
     thread_title,
     title_with_label_prefix,
 )
-from investment_tool.sources.x.raw import load_raw_api_archive, raw_response_tweets, saved_raw_response
-from investment_tool.sources.x.rebuild import (
+from investment_tool.feeds.x.raw import load_raw_api_archive, raw_response_tweets, saved_raw_response
+from investment_tool.feeds.x.rebuild import (
     clean_raw_rebuilt_thread_record,
     conversation_ids_from_raw_tweets,
     group_raw_conversations,
     rebuild_from_raw_api,
     replace_generated_thread_jsons,
 )
-from investment_tool.sources.x.threads import (
+from investment_tool.feeds.x.threads import (
     display_text,
     existing_local_media_paths,
     explicit_x_links,
@@ -65,7 +65,7 @@ from investment_tool.sources.x.threads import (
     thread_media_keys,
     thread_user_map,
 )
-from investment_tool.sources.x.store import (
+from investment_tool.feeds.x.store import (
     apply_cached_relevance_gate,
     cleanup_old_thread_versions,
     entries_from_cached_json,
@@ -116,8 +116,8 @@ def classify_thread(root: dict | None, items: list[dict]) -> str:
     return _classify_thread(root, items, _DEFAULT_CONTEXT)
 
 
-def source_conversation_tickers(root: dict | None, items: list[dict]) -> list[str]:
-    return _source_conversation_tickers(root, items, _DEFAULT_CONTEXT)
+def feed_conversation_tickers(root: dict | None, items: list[dict]) -> list[str]:
+    return _feed_conversation_tickers(root, items, _DEFAULT_CONTEXT)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

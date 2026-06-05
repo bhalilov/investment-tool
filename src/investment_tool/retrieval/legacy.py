@@ -26,15 +26,15 @@ from typing import Any
 
 from investment_tool.analysis.openai import OPENAI_API_BASE, request_json as openai_request_json
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.config import SourceProfile, load_x_source_profile, source_identity, source_label
+from investment_tool.runtime.config import FeedProfile, load_x_feed_profile, feed_identity, feed_label
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
 
 
 DEFAULT_PUBLIC_BASE_URL = "http://localhost:8787"
-SOURCE_PROFILE: SourceProfile = load_x_source_profile()
-SOURCE_USERNAME = SOURCE_PROFILE.username
-SOURCE_USER_ID = SOURCE_PROFILE.user_id
+FEED_PROFILE: FeedProfile = load_x_feed_profile()
+FEED_USERNAME = FEED_PROFILE.username
+FEED_USER_ID = FEED_PROFILE.user_id
 
 
 def iso_now() -> str:
@@ -67,19 +67,20 @@ def display_text(tweet: dict[str, Any]) -> str:
 
 
 def tweet_url(tweet_id: str) -> str:
-    return f"https://x.com/{SOURCE_USERNAME}/status/{tweet_id}"
+    return f"https://x.com/{FEED_USERNAME}/status/{tweet_id}"
 
 
-def configure_source(profile: SourceProfile) -> None:
-    global SOURCE_PROFILE, SOURCE_USERNAME, SOURCE_USER_ID
-    SOURCE_PROFILE = profile
-    SOURCE_USERNAME = profile.username
-    SOURCE_USER_ID = profile.user_id
+def configure_feed(profile: FeedProfile) -> None:
+    global FEED_PROFILE, FEED_USERNAME, FEED_USER_ID
+    FEED_PROFILE = profile
+    FEED_USERNAME = profile.username
+    FEED_USER_ID = profile.user_id
 
 
-def record_source_identity(record: dict[str, Any]) -> dict[str, Any]:
-    source = record.get("source") if isinstance(record.get("source"), dict) else {}
-    return {**source_identity(SOURCE_PROFILE), **source}
+def record_feed_identity(record: dict[str, Any]) -> dict[str, Any]:
+    feed = record.get("feed") if isinstance(record.get("feed"), dict) else {}
+    feed = feed if isinstance(feed, dict) else {}
+    return {**feed_identity(FEED_PROFILE), **feed}
 
 
 def as_list(value: Any) -> list[Any]:
@@ -98,24 +99,24 @@ def web_join(base_url: str, *parts: str) -> str:
     return "/".join([base] + clean_parts)
 
 
-def evidence_filename(record: dict[str, Any], source_path: Path) -> str:
+def evidence_filename(record: dict[str, Any], record_path: Path) -> str:
     created_at = str(record.get("created_at") or "")
-    date = created_at[:10].replace("-", "") if len(created_at) >= 10 else source_path.name[:8]
+    date = created_at[:10].replace("-", "") if len(created_at) >= 10 else record_path.name[:8]
     primary_ticker = str(record.get("primary_ticker") or "UNKNOWN").upper()
-    thread_id = str(record.get("conversation_id") or source_path.stem.split("__")[-1])
-    title = clean_text(record.get("title")) or source_path.stem
+    thread_id = str(record.get("conversation_id") or record_path.stem.split("__")[-1])
+    title = clean_text(record.get("title")) or record_path.stem
     topic = safe_stem(title.lower(), "thread")
     return f"{date}__{primary_ticker}__{topic}__{thread_id}.md"
 
 
-def first_source_tweet_id(record: dict[str, Any]) -> str:
+def first_feed_tweet_id(record: dict[str, Any]) -> str:
     conversation_id = str(record.get("conversation_id") or "")
     tweets = as_list(record.get("tweets"))
     for tweet in tweets:
         if str(tweet.get("id") or "") == conversation_id:
             return conversation_id
     for tweet in sorted(tweets, key=lambda item: str(item.get("created_at") or "")):
-        if str(tweet.get("author_id") or "") == SOURCE_USER_ID and tweet.get("id"):
+        if str(tweet.get("author_id") or "") == FEED_USER_ID and tweet.get("id"):
             return str(tweet["id"])
     return conversation_id
 
@@ -138,13 +139,13 @@ def media_urls(record: dict[str, Any], public_base_url: str) -> list[str]:
     return list(dict.fromkeys(urls))
 
 
-def thread_metadata(record: dict[str, Any], source_path: Path) -> dict[str, str | int | float | bool]:
-    source = record_source_identity(record)
+def thread_metadata(record: dict[str, Any], record_path: Path) -> dict[str, str | int | float | bool]:
+    feed = record_feed_identity(record)
     tickers = [str(item).upper() for item in as_list(record.get("tickers")) if str(item).strip()]
     primary_ticker = str(record.get("primary_ticker") or "UNKNOWN").upper()
-    title = clean_text(record.get("title")) or source_path.stem
+    title = clean_text(record.get("title")) or record_path.stem
     created_at = str(record.get("created_at") or "")
-    thread_date = created_at[:10] if len(created_at) >= 10 else source_path.name[:8]
+    thread_date = created_at[:10] if len(created_at) >= 10 else record_path.name[:8]
     if re.fullmatch(r"\d{8}", thread_date):
         thread_date = f"{thread_date[:4]}-{thread_date[4:6]}-{thread_date[6:8]}"
     media_paths = record.get("media_paths") or {}
@@ -154,12 +155,12 @@ def thread_metadata(record: dict[str, Any], source_path: Path) -> dict[str, str 
     category = str(record.get("category") or "")
     noise = primary_ticker == "UNKNOWN" and priority in {"P3", "P4"} and category in {"RANT", "BRAG", "SELF_PROMO", "OFF_TOPIC"}
     return {
-        "source_type": "x_thread",
-        "source_id": str(source.get("source_id") or "")[:128],
-        "source_platform": str(source.get("platform") or "")[:64],
-        "source_username": str(source.get("username") or "")[:128],
-        "source_user_id": str(source.get("user_id") or "")[:128],
-        "thread_id": str(record.get("conversation_id") or source_path.stem.split("__")[-1]),
+        "feed_type": "x_thread",
+        "feed_id": str(feed.get("feed_id") or "")[:128],
+        "feed_platform": str(feed.get("platform") or "")[:64],
+        "feed_username": str(feed.get("username") or "")[:128],
+        "feed_user_id": str(feed.get("user_id") or "")[:128],
+        "thread_id": str(record.get("conversation_id") or record_path.stem.split("__")[-1]),
         "content_type": "evidence_thread",
         "primary_ticker": primary_ticker[:64],
         "tickers": ",".join(tickers)[:512],
@@ -175,29 +176,29 @@ def thread_metadata(record: dict[str, Any], source_path: Path) -> dict[str, str 
     }
 
 
-def render_thread_markdown(record: dict[str, Any], source_path: Path, public_base_url: str) -> str:
-    metadata = thread_metadata(record, source_path)
+def render_thread_markdown(record: dict[str, Any], record_path: Path, public_base_url: str) -> str:
+    metadata = thread_metadata(record, record_path)
     thread_id = str(metadata["thread_id"])
-    source_tweet_id = first_source_tweet_id(record)
+    feed_tweet_id = first_feed_tweet_id(record)
     canonical_filename = str(record.get("canonical_filename") or "")
     captured_html_url = web_join(public_base_url, "threads", canonical_filename) if canonical_filename else ""
-    evidence_url = web_join(public_base_url, "evidence", evidence_filename(record, source_path))
+    evidence_url = web_join(public_base_url, "evidence", evidence_filename(record, record_path))
     urls = media_urls(record, public_base_url)
-    source = record_source_identity(record)
+    feed = record_feed_identity(record)
     lines: list[str] = []
     title = metadata["title"]
     lines.append(f"# {title}")
     lines.append("")
-    lines.append(f"Source Profile ID: {source.get('source_id') or ''}")
-    lines.append(f"Source Platform: {source.get('platform') or ''}")
-    lines.append(f"Source Account: @{source.get('username') or ''}")
-    lines.append(f"Source User ID: {source.get('user_id') or ''}")
-    lines.append(f"Source Display Name: {source.get('display_name') or ''}")
-    lines.append(f"Source X URL: {tweet_url(source_tweet_id) if source_tweet_id else ''}")
+    lines.append(f"Feed Profile ID: {feed.get('feed_id') or ''}")
+    lines.append(f"Feed Platform: {feed.get('platform') or ''}")
+    lines.append(f"Feed Account: @{feed.get('username') or ''}")
+    lines.append(f"Feed User ID: {feed.get('user_id') or ''}")
+    lines.append(f"Feed Display Name: {feed.get('display_name') or ''}")
+    lines.append(f"Feed X URL: {tweet_url(feed_tweet_id) if feed_tweet_id else ''}")
     lines.append(f"Captured HTML URL: {captured_html_url}")
     lines.append(f"Evidence URL: {evidence_url}")
     lines.append(f"Captured Date: {metadata['date']}")
-    lines.append(f"Source Type: {metadata['source_type']}")
+    lines.append(f"Feed Type: {metadata['feed_type']}")
     lines.append(f"Thread ID: {thread_id}")
     lines.append(f"Primary Ticker: {metadata['primary_ticker']}")
     lines.append(f"Tickers: {metadata['tickers']}")
@@ -236,11 +237,11 @@ def render_thread_markdown(record: dict[str, Any], source_path: Path, public_bas
         key=lambda item: str(item.get("created_at") or ""),
     )
     users = record.get("users") or {}
-    source_tweets = [tweet for tweet in tweets if str(tweet.get("author_id") or "") == SOURCE_USER_ID]
-    other_tweets = [tweet for tweet in tweets if str(tweet.get("author_id") or "") != SOURCE_USER_ID]
-    if source_tweets:
-        lines.extend(["", "## Source Posts"])
-    for tweet in source_tweets:
+    feed_tweets = [tweet for tweet in tweets if str(tweet.get("author_id") or "") == FEED_USER_ID]
+    other_tweets = [tweet for tweet in tweets if str(tweet.get("author_id") or "") != FEED_USER_ID]
+    if feed_tweets:
+        lines.extend(["", "## Feed Posts"])
+    for tweet in feed_tweets:
         tweet_id = str(tweet.get("id") or "")
         created_at = tweet.get("created_at") or ""
         text = clean_text(display_text(tweet))
@@ -255,7 +256,7 @@ def render_thread_markdown(record: dict[str, Any], source_path: Path, public_bas
         )
 
     if other_tweets:
-        lines.extend(["", "## Questions Source Answered"])
+        lines.extend(["", "## Questions Feed Answered"])
     for tweet in other_tweets:
         tweet_id = str(tweet.get("id") or "")
         author_id = str(tweet.get("author_id") or "")
@@ -301,7 +302,7 @@ def render_thread_markdown(record: dict[str, Any], source_path: Path, public_bas
     return "\n".join(lines).strip() + "\n"
 
 
-def render_thread_json(record: dict[str, Any], source_path: Path) -> str:
+def render_thread_json(record: dict[str, Any], record_path: Path) -> str:
     """Render a compact JSON document for users who prefer exact structured uploads."""
     tweets = []
     users = record.get("users") or {}
@@ -320,7 +321,7 @@ def render_thread_json(record: dict[str, Any], source_path: Path) -> str:
             }
         )
     document = {
-        "metadata": thread_metadata(record, source_path),
+        "metadata": thread_metadata(record, record_path),
         "tldr": clean_text(record.get("tldr")),
         "analysis": clean_text(record.get("analysis")),
         "evidence": as_list(record.get("evidence")),
@@ -334,8 +335,8 @@ def render_thread_json(record: dict[str, Any], source_path: Path) -> str:
     return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
-def render_thread_document(record: dict[str, Any], source_path: Path, public_base_url: str) -> str:
-    return render_thread_markdown(record, source_path, public_base_url)
+def render_thread_document(record: dict[str, Any], record_path: Path, public_base_url: str) -> str:
+    return render_thread_markdown(record, record_path, public_base_url)
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
@@ -519,7 +520,7 @@ def generate_evidence_documents(args: argparse.Namespace) -> tuple[int, int, int
 
 def evidence_metadata(path: Path) -> dict[str, str | int | float | bool]:
     metadata: dict[str, str | int | float | bool] = {
-        "source_type": "x_thread",
+        "feed_type": "x_thread",
         "content_type": "evidence_thread",
         "thread_id": "",
         "date": "",
@@ -532,7 +533,7 @@ def evidence_metadata(path: Path) -> dict[str, str | int | float | bool]:
     header = path.read_text(encoding="utf-8")[:6000]
     key_map = {
         "Captured Date": "date",
-        "Source Type": "source_type",
+        "Feed Type": "feed_type",
         "Thread ID": "thread_id",
         "Primary Ticker": "primary_ticker",
         "Tickers": "tickers",
@@ -566,7 +567,7 @@ def iter_evidence_paths(evidence_dir: Path) -> list[Path]:
 def sync_threads(args: argparse.Namespace) -> int:
     env_path = Path(args.env_file).expanduser()
     load_env(env_path)
-    configure_source(load_x_source_profile(args.source_config, args.source_id))
+    configure_feed(load_x_feed_profile(args.feed_config, args.feed_id))
     storage = storage_paths()
     if not args.thread_json_dir:
         args.thread_json_dir = str(storage.x_records)
@@ -580,7 +581,7 @@ def sync_threads(args: argparse.Namespace) -> int:
             or DEFAULT_PUBLIC_BASE_URL
         )
     if not args.vector_store_name:
-        args.vector_store_name = f"{source_label(SOURCE_PROFILE)} X Threads"
+        args.vector_store_name = f"{feed_label(FEED_PROFILE)} X Threads"
     evidence_dir = resolve_portable_path(args.evidence_dir)
     manifest_path = resolve_portable_path(args.manifest)
     initial_paths = iter_evidence_paths(evidence_dir)
@@ -746,9 +747,9 @@ def sync_threads(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Sync captured X source threads into an OpenAI vector store.")
-    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
-    parser.add_argument("--source-id", default="")
+    parser = argparse.ArgumentParser(description="Sync captured X feed threads into an OpenAI vector store.")
+    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-id", default="")
     parser.add_argument("--thread-json-dir", default="")
     parser.add_argument("--evidence-dir", default="")
     parser.add_argument("--manifest", default="")

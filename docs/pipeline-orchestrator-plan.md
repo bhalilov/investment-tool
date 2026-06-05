@@ -7,7 +7,7 @@ the old `pipeline_orchestrator x-capture` command as the production interface.
 ## Goal
 
 Build a top-down workflow system that can run scheduled incremental updates,
-manual historical rebuilds, and read-only health checks without mixing source
+manual historical rebuilds, and read-only health checks without mixing feed
 capture, presentation rendering, AI passes, and vector-store decisions in one
 large script.
 
@@ -66,7 +66,7 @@ The orchestrator must stay coordinate-only:
 - write logs;
 - return final status.
 
-It must not contain source-specific X, HC, market-price, media, AI, or vector
+It must not contain feed-specific X, HC, market-price, media, AI, or vector
 implementation details.
 
 ## Stage Types
@@ -75,7 +75,7 @@ Every stage has one of three operating shapes.
 
 ### Batch Stage
 
-Batch stages process a source or folder as a group.
+Batch stages process a feed or folder as a group.
 
 Contract:
 
@@ -203,7 +203,7 @@ Failure policy:
 
 ### x-capture
 
-Captures X source data only.
+Captures X feed data only.
 
 Writes:
 
@@ -254,7 +254,7 @@ This stage may call OpenAI in `workflow update`, but it is not the thread Phase
 ### render
 
 Generates thread HTML and index pages from clean JSON. Rendering is split from
-capture so source capture and presentation are not mixed.
+capture so feed capture and presentation are not mixed.
 
 ### articles
 

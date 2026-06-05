@@ -15,8 +15,8 @@ from investment_tool.runtime.paths import portable_path, resolve_portable_path, 
 from investment_tool.runtime.reporting import JobReporter
 from investment_tool.rules.filters import primary_label
 from investment_tool.rules.tickers import ticker_bucket_payload
-from investment_tool.sources.x.context import XCaptureContext
-from investment_tool.sources.x.metadata import (
+from investment_tool.feeds.x.context import XCaptureContext
+from investment_tool.feeds.x.metadata import (
     analysis_field_payload,
     apply_pending_safe_summary,
     base_thread_metadata,
@@ -29,12 +29,12 @@ from investment_tool.sources.x.metadata import (
     root_primary_tickers,
     rough_tldr,
     safe_slug,
-    source_conversation_tickers,
+    feed_conversation_tickers,
     thread_created_at,
     thread_title,
     title_with_label_prefix,
 )
-from investment_tool.sources.x.api import (
+from investment_tool.feeds.x.api import (
     XClient,
     download_photos,
     fetch_timeline,
@@ -43,8 +43,8 @@ from investment_tool.sources.x.api import (
     refresh_x_user_token,
     search_conversation,
 )
-from investment_tool.sources.x.raw import load_raw_api_archive
-from investment_tool.sources.x.threads import (
+from investment_tool.feeds.x.raw import load_raw_api_archive
+from investment_tool.feeds.x.threads import (
     explicit_x_links,
     media_keys,
     parent_id,
@@ -54,7 +54,7 @@ from investment_tool.sources.x.threads import (
     thread_local_media_paths,
 )
 from investment_tool.presentation.threads import date_prefix, render_thread_html
-from investment_tool.sources.x.store import (
+from investment_tool.feeds.x.store import (
     cleanup_old_thread_versions,
     entries_from_cached_json,
     find_cached_thread_record,
@@ -92,9 +92,9 @@ def data_root() -> Path:
     return storage_paths_for_x_root().root
 
 
-def prepare_x_capture_paths(run_id: str, source_root: str | Path | None = None) -> XCapturePaths:
-    storage = storage_paths_for_x_root(source_root)
-    root = resolve_portable_path(source_root) if source_root else storage.x_root
+def prepare_x_capture_paths(run_id: str, feed_root: str | Path | None = None) -> XCapturePaths:
+    storage = storage_paths_for_x_root(feed_root)
+    root = resolve_portable_path(feed_root) if feed_root else storage.x_root
     paths = XCapturePaths(
         root=root,
         raw_dir=root / "raw" / run_id,
@@ -360,7 +360,7 @@ def run_live_x_capture(
         title, slug = thread_title(root_tweet, items)
         op_tickers = root_post_tickers(root_tweet)
         metadata_tickers = root_primary_tickers(root_tweet)
-        relevance_tickers = source_conversation_tickers(root_tweet, items, context)
+        relevance_tickers = feed_conversation_tickers(root_tweet, items, context)
         thread_type = classify_thread(root_tweet, items, context)
         tags = list(dict.fromkeys(infer_tags(items, thread_type, metadata_tickers, context) + media_placeholder_tags(items, local_media, context)))
         label = primary_label(metadata_tickers, tags)
@@ -383,7 +383,7 @@ def run_live_x_capture(
                 "media": local_media,
                 "media_paths": local_media_paths,
                 "non_photo_media": non_photo_media_placeholders(items, local_media, context),
-                "source": context.source_record(kind="live_capture_or_cached_update", raw_api_used=True, x_api_called=True),
+                "feed": context.feed_record(kind="live_capture_or_cached_update", raw_api_used=True, x_api_called=True),
                 "ignored": True,
                 "ignored_reason": reason,
                 "ignored_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -474,7 +474,7 @@ def run_live_x_capture(
                             "media": local_media,
                             "media_paths": local_media_paths,
                             "non_photo_media": non_photo_media_placeholders(items, local_media, context),
-                            "source": context.source_record(kind="live_capture", raw_api_used=True, x_api_called=True),
+                            "feed": context.feed_record(kind="live_capture", raw_api_used=True, x_api_called=True),
                             "rate_limits": client.rate_limits,
                         },
                         analysis_metadata,
@@ -513,9 +513,9 @@ def run_live_x_capture(
                 "conversation_id": conversation_id,
                 "abs_path": str(html_path),
                 "posts": len(items),
-                "source_posts": sum(1 for item in items if item.get("author_id") == context.user_id),
+                "feed_posts": sum(1 for item in items if item.get("author_id") == context.user_id),
                 "photos": sum(len(media_keys(item)) for item in items),
-                **context.source_entry_fields(existing_data),
+                **context.feed_entry_fields(existing_data),
             }
         )
 

@@ -1,4 +1,4 @@
-"""Source-neutral thread relevance and labeling helpers."""
+"""Feed-neutral thread relevance and labeling helpers."""
 
 from __future__ import annotations
 
@@ -31,9 +31,9 @@ DEFAULT_SELF_PROMO_PATTERNS = ["subscription", "subscriber", "subscribe", "musts
 
 @dataclass(frozen=True)
 class ThreadFilterConfig:
-    source_user_id: str = ""
-    source_started_label: str = "SOURCE_THREAD"
-    source_reply_label: str = "SOURCE_REPLY_CONTEXT"
+    feed_user_id: str = ""
+    feed_started_label: str = "FEED_THREAD"
+    feed_reply_label: str = "FEED_REPLY_CONTEXT"
     linked_context_domains: tuple[str, ...] = ()
     self_promo_patterns: tuple[str, ...] = tuple(DEFAULT_SELF_PROMO_PATTERNS)
 
@@ -76,17 +76,17 @@ def normalize_thread_label(value: str | None, tags: list[str]) -> str:
     return "UNKNOWN"
 
 
-def source_items(items: list[dict[str, Any]], source_user_id: str) -> list[dict[str, Any]]:
-    return [item for item in items if item.get("author_id") == source_user_id]
+def feed_items(items: list[dict[str, Any]], feed_user_id: str) -> list[dict[str, Any]]:
+    return [item for item in items if item.get("author_id") == feed_user_id]
 
 
 def relevance_text(
     root: dict[str, Any] | None,
     items: list[dict[str, Any]],
-    source_user_id: str,
+    feed_user_id: str,
     text_of: Callable[[dict[str, Any]], str],
 ) -> str:
-    selected = source_items(items, source_user_id)
+    selected = feed_items(items, feed_user_id)
     parts = [text_of(root or {})] + [text_of(item) for item in selected]
     return "\n".join(part for part in parts if part)
 
@@ -100,14 +100,14 @@ def investment_relevance_score(
     linked_post_ids_of: Callable[[dict[str, Any]], list[str]],
     media_keys_of: Callable[[dict[str, Any]], list[str]],
 ) -> int:
-    text = relevance_text(root, items, config.source_user_id, text_of)
-    source_only = source_items(items, config.source_user_id)
+    text = relevance_text(root, items, config.feed_user_id, text_of)
+    feed_only = feed_items(items, config.feed_user_id)
     score = 0
     score += 4 * len(tickers)
     score += 3 if FINANCE_RE.search(text) else 0
     score += 3 if has_linked_research_domain(text, config.linked_context_domains) else 0
-    score += 2 if any(linked_post_ids_of(item) for item in source_only) else 0
-    score += 1 if any(media_keys_of(item) for item in source_only) else 0
+    score += 2 if any(linked_post_ids_of(item) for item in feed_only) else 0
+    score += 1 if any(media_keys_of(item) for item in feed_only) else 0
     return score
 
 
@@ -122,28 +122,28 @@ def ignore_reason(
     linked_post_ids_of: Callable[[dict[str, Any]], list[str]],
     media_keys_of: Callable[[dict[str, Any]], list[str]],
 ) -> str | None:
-    selected = source_items(items, config.source_user_id)
+    selected = feed_items(items, config.feed_user_id)
     if not selected:
         return None
-    text = relevance_text(root, items, config.source_user_id, text_of)
+    text = relevance_text(root, items, config.feed_user_id, text_of)
     score = investment_relevance_score(root, items, tickers, config, text_of, linked_post_ids_of, media_keys_of)
-    if root and root.get("author_id") == config.source_user_id and is_retweet(root) and score == 0:
+    if root and root.get("author_id") == config.feed_user_id and is_retweet(root) and score == 0:
         return "OFF_TOPIC_RETWEET"
     if (
         root
-        and root.get("author_id") == config.source_user_id
+        and root.get("author_id") == config.feed_user_id
         and is_retweet(root)
         and not tickers
         and self_promo_re(config.self_promo_patterns).search(text)
     ):
         return "SELF_PROMO_RETWEET"
-    if thread_type == config.source_reply_label and not tickers:
+    if thread_type == config.feed_reply_label and not tickers:
         has_linked_research = has_linked_research_domain(text, config.linked_context_domains)
-        has_source_link = any(linked_post_ids_of(item) for item in selected)
-        has_source_media = any(media_keys_of(item) for item in selected)
-        if not has_linked_research and not has_source_link and not has_source_media and not NO_TICKER_FINANCE_RE.search(text):
+        has_feed_link = any(linked_post_ids_of(item) for item in selected)
+        has_feed_media = any(media_keys_of(item) for item in selected)
+        if not has_linked_research and not has_feed_link and not has_feed_media and not NO_TICKER_FINANCE_RE.search(text):
             return "OFF_TOPIC_REPLY_CONTEXT"
-    if thread_type == config.source_reply_label and score == 0:
+    if thread_type == config.feed_reply_label and score == 0:
         return "OFF_TOPIC_REPLY_CONTEXT"
     return None
 
@@ -158,7 +158,7 @@ def infer_tags(
     media_keys_of: Callable[[dict[str, Any]], list[str]],
     has_note_text: Callable[[dict[str, Any]], bool],
 ) -> list[str]:
-    selected = source_items(items, config.source_user_id) or items
+    selected = feed_items(items, config.feed_user_id) or items
     text = "\n".join(text_of(item) for item in selected).lower()
     tags = [thread_type]
     if any(media_keys_of(item) for item in items):
@@ -186,3 +186,7 @@ def infer_tags(
     if any(word in text for word in ("politics", "rant", "nonsense")):
         tags.append("RANT")
     return list(dict.fromkeys(tags))
+
+
+# Compatibility alias while old callers are phased out.
+source_items = feed_items

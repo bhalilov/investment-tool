@@ -34,8 +34,8 @@ class MarketPriceTests(unittest.TestCase):
             "EUR": (
                 {"2026-03-02": 1.2},
                 {
-                    "fx_source": "fixture",
-                    "fx_source_symbol": "EURUSD=X",
+                    "fx_provider": "fixture",
+                    "fx_provider_symbol": "EURUSD=X",
                     "fx_direction": "direct",
                     "fx_currency": "EUR",
                     "fx_rows": 1,
@@ -62,7 +62,7 @@ class MarketPriceTests(unittest.TestCase):
         fx_cache = {
             "HKD": (
                 {"2026-03-02": 0.125},
-                {"fx_source": "fixture", "fx_source_symbol": "USDHKD=X", "fx_direction": "inverse", "fx_currency": "HKD"},
+                {"fx_provider": "fixture", "fx_provider_symbol": "USDHKD=X", "fx_direction": "inverse", "fx_currency": "HKD"},
             )
         }
 

@@ -94,8 +94,8 @@ def massive_daily(symbol: str, start: str, end: str, api_key: str) -> tuple[list
             }
         )
     meta = {
-        "source": "massive",
-        "source_symbol": data.get("ticker") or symbol,
+        "provider": "massive",
+        "provider_symbol": data.get("ticker") or symbol,
         "status": data.get("status"),
         "results_count": data.get("resultsCount") or len(rows),
         "adjusted": True,
@@ -144,8 +144,8 @@ def yahoo_daily(symbol: str, start: str, end: str) -> tuple[list[dict[str, Any]]
         )
     meta_src = result.get("meta") or {}
     meta = {
-        "source": "yahoo_chart",
-        "source_symbol": symbol,
+        "provider": "yahoo_chart",
+        "provider_symbol": symbol,
         "currency": meta_src.get("currency"),
         "exchange": meta_src.get("exchangeName"),
         "full_exchange": meta_src.get("fullExchangeName"),
@@ -170,8 +170,8 @@ def fx_daily(currency: str, start: str, end: str) -> tuple[dict[str, float], dic
         value = float(close)
         rates[row["date"]] = value if direction == "direct" else 1 / value
     return rates, {
-        "fx_source": meta.get("source"),
-        "fx_source_symbol": symbol,
+        "fx_provider": meta.get("provider"),
+        "fx_provider_symbol": symbol,
         "fx_direction": direction,
         "fx_currency": currency,
         "fx_rows": len(rates),
@@ -257,7 +257,7 @@ def fetch_listing(symbol: str, market: str, start: str, end: str, api_key: str) 
         errors.append("yahoo returned no bars")
     except Exception as exc:
         errors.append(f"yahoo: {exc}")
-    raise RuntimeError("; ".join(errors) or "no source attempted")
+    raise RuntimeError("; ".join(errors) or "no provider attempted")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -355,7 +355,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "symbol": symbol,
                         "market": market,
                         "role": listing.get("role"),
-                        "source": meta.get("source"),
+                        "provider": meta.get("provider"),
                         "rows": len(rows),
                         "currency": meta.get("currency"),
                         "path": portable_path(out_path),
@@ -363,16 +363,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 stats["processed"] += 1
                 stats["rows_written"] += len(rows)
-                if meta.get("source") == "massive":
+                if meta.get("provider") == "massive":
                     stats["massive_calls"] += 1
-                elif meta.get("source") == "yahoo_chart":
+                elif meta.get("provider") == "yahoo_chart":
                     stats["yahoo_calls"] += 1
                 stats["errors"] = len(manifest["errors"])
                 reporter.checkpoint_stats(
                     stats,
                     processed=stats["processed"],
                     symbol=symbol,
-                    source=meta.get("source"),
+                    provider=meta.get("provider"),
                     rows=len(rows),
                 )
             except Exception as exc:

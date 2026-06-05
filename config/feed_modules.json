@@ -5,8 +5,8 @@
       "module_id": "x-capture",
       "platform": "x",
       "kind": "social_capture",
-      "entrypoint": "investment_tool.sources.x.capture",
-      "source_config": "config/sources/x_accounts.json",
+      "entrypoint": "investment_tool.feeds.x.capture",
+      "feed_config": "config/feeds/x_accounts.json",
       "supports": [
         "live_capture",
         "raw_api_rebuild",
@@ -19,8 +19,8 @@
       "module_id": "articles",
       "platform": "web_archive",
       "kind": "article_archive",
-      "entrypoint": "investment_tool.sources.articles.ingest",
-      "source_config": "config/sources/web_archives.json",
+      "entrypoint": "investment_tool.feeds.articles.ingest",
+      "feed_config": "config/feeds/web_archives.json",
       "supports": [
         "manual_archive_ingest",
         "text_only_ai_analysis"
@@ -30,7 +30,7 @@
       "module_id": "screenshots",
       "platform": "manual_screenshots",
       "kind": "manual_capture",
-      "entrypoint": "investment_tool.sources.screenshots.bundles",
+      "entrypoint": "investment_tool.feeds.screenshots.bundles",
       "supports": [
         "screenshot_bundle_import",
         "overlap_stitching_ai_reconstruction"

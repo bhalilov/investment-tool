@@ -1,7 +1,7 @@
 {
   "start_date": "2026-03-01",
   "notes": [
-    "Primary source is Massive for US-listed equities and ADRs.",
+    "Primary provider is Massive for US-listed equities and ADRs.",
     "Non-US primary listings use Yahoo chart data when Massive does not provide bars.",
     "Robinhood symbols were checked with Robinhood instrument search on 2026-06-02.",
     "International companies keep their local primary listing when useful, plus the Robinhood symbol when Robinhood exposes a different US/ADR instrument.",

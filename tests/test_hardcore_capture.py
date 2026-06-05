@@ -72,7 +72,7 @@ class HardcoreCaptureTests(unittest.TestCase):
 
         markdown = hardcore_capture.render_markdown(record)
 
-        self.assertIn("Source Type: hardcore_article", markdown)
+        self.assertIn("Feed Type: article", markdown)
         self.assertIn("OCR Used: false", markdown)
         self.assertIn("## Extracted Article Text", markdown)
 

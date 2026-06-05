@@ -15,15 +15,15 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.config import SourceProfile, load_x_source_profile
+from investment_tool.runtime.config import FeedProfile, load_x_feed_profile
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
 
 
 DEFAULT_PUBLIC_BASE_URL = "http://localhost:8787"
 DEFAULT_PORT = 8787
-SOURCE_PROFILE: SourceProfile = load_x_source_profile()
-SOURCE_USERNAME = SOURCE_PROFILE.username
+FEED_PROFILE: FeedProfile = load_x_feed_profile()
+FEED_USERNAME = FEED_PROFILE.username
 
 
 def clean_text(value: Any) -> str:
@@ -39,17 +39,17 @@ def as_list(value: Any) -> list[Any]:
 
 
 def tweet_url(tweet_id: str) -> str:
-    return f"https://x.com/{SOURCE_USERNAME}/status/{tweet_id}"
+    return f"https://x.com/{FEED_USERNAME}/status/{tweet_id}"
 
 
-def configure_source(profile: SourceProfile) -> None:
-    global SOURCE_PROFILE, SOURCE_USERNAME
-    SOURCE_PROFILE = profile
-    SOURCE_USERNAME = profile.username
+def configure_feed(profile: FeedProfile) -> None:
+    global FEED_PROFILE, FEED_USERNAME
+    FEED_PROFILE = profile
+    FEED_USERNAME = profile.username
 
 
 def normalize_api_path(path: str) -> str:
-    for prefix in ("/source", "/aj"):
+    for prefix in ("/feed",):
         if path == prefix:
             return "/"
         if path.startswith(f"{prefix}/"):
@@ -58,7 +58,7 @@ def normalize_api_path(path: str) -> str:
 
 
 def legacy_evidence_headings(kind: str) -> list[str]:
-    headings = SOURCE_PROFILE.user_specifics.get("legacy_evidence_headings") or {}
+    headings = FEED_PROFILE.user_specifics.get("legacy_evidence_headings") or {}
     values = headings.get(kind) if isinstance(headings, dict) else []
     return [str(item) for item in values or [] if str(item)]
 
@@ -84,16 +84,16 @@ def parse_frontmatterish_markdown(path: Path) -> dict[str, Any]:
         "evidence_excerpt": excerpt_from_markdown(text),
     }
     key_map = {
-        "Source X URL": "x_url",
+        "Feed X URL": "x_url",
         "Captured HTML URL": "captured_html_url",
         "Evidence URL": "evidence_url",
         "Captured Date": "date",
-        "Source Type": "source_type",
-        "Source Profile ID": "source_id",
-        "Source Platform": "source_platform",
-        "Source Account": "source_account",
-        "Source User ID": "source_user_id",
-        "Source Display Name": "source_display_name",
+        "Feed Type": "feed_type",
+        "Feed Profile ID": "feed_id",
+        "Feed Platform": "feed_platform",
+        "Feed Account": "feed_account",
+        "Feed User ID": "feed_user_id",
+        "Feed Display Name": "feed_display_name",
         "Thread ID": "thread_id",
         "Primary Ticker": "primary_ticker",
         "Tickers": "tickers",
@@ -119,7 +119,7 @@ def parse_frontmatterish_markdown(path: Path) -> dict[str, Any]:
             data[key] = [item.strip().upper() for item in value.split(",") if item.strip()]
         else:
             data[key] = value
-    data.setdefault("source_type", "x_thread")
+    data.setdefault("feed_type", "x_thread")
     data.setdefault("primary_ticker", "UNKNOWN")
     data.setdefault("tickers", [])
     data.setdefault("date", "")
@@ -128,8 +128,8 @@ def parse_frontmatterish_markdown(path: Path) -> dict[str, Any]:
     data.setdefault("captured_html_url", "")
     data.setdefault("evidence_url", "")
     data["media_urls"] = sorted(set(re.findall(r"Media URL: (http://[^\s]+|https://[^\s]+)", text)))
-    source_post_headings = ["Source Posts", *legacy_evidence_headings("source_posts")]
-    data["summary"] = extract_section(text, "Thread Summary", ["Analysis", "Evidence", *source_post_headings])
+    feed_post_headings = ["Feed Posts", *legacy_evidence_headings("feed_posts")]
+    data["summary"] = extract_section(text, "Thread Summary", ["Analysis", "Evidence", *feed_post_headings])
     return data
 
 
@@ -149,16 +149,16 @@ def extract_section(text: str, heading: str, next_headings: list[str]) -> str:
 
 
 def excerpt_from_markdown(text: str, limit: int = 1200) -> str:
-    source_post_headings = ["Source Posts", *legacy_evidence_headings("source_posts")]
-    question_headings = ["Questions Source Answered", *legacy_evidence_headings("questions_answered")]
-    for heading in ("Thread Summary", "Evidence", *source_post_headings):
+    feed_post_headings = ["Feed Posts", *legacy_evidence_headings("feed_posts")]
+    question_headings = ["Questions Feed Answered", *legacy_evidence_headings("questions_answered")]
+    for heading in ("Thread Summary", "Evidence", *feed_post_headings):
         section = extract_section(
             text,
             heading,
             [
                 "Analysis",
                 "Evidence",
-                *source_post_headings,
+                *feed_post_headings,
                 *question_headings,
                 "Screenshots And OCR",
             ],
@@ -223,13 +223,13 @@ class EvidenceStore:
     def search(self, payload: dict[str, Any]) -> dict[str, Any]:
         query = clean_text(payload.get("query"))
         tickers = [str(item).upper().lstrip("$") for item in as_list(payload.get("tickers"))]
-        source_types = {str(item) for item in as_list(payload.get("source_types"))}
+        feed_types = {str(item) for item in as_list(payload.get("feed_types"))}
         date_from = str(payload.get("date_from") or "")
         date_to = str(payload.get("date_to") or "")
         limit = int(payload.get("limit") or 10)
         ranked: list[tuple[int, dict[str, Any]]] = []
         for record in self.evidence_records():
-            if source_types and record.get("source_type") not in source_types:
+            if feed_types and record.get("feed_type") not in feed_types:
                 continue
             if date_from and str(record.get("date") or "") < date_from:
                 continue
@@ -246,7 +246,7 @@ class EvidenceStore:
     def compact_result(self, record: dict[str, Any], score: int | None = None) -> dict[str, Any]:
         result = {
             "title": record.get("title", ""),
-            "source_type": record.get("source_type", ""),
+            "feed_type": record.get("feed_type", ""),
             "date": record.get("date", ""),
             "primary_ticker": record.get("primary_ticker", ""),
             "tickers": record.get("tickers", []),
@@ -313,9 +313,9 @@ class EvidenceStore:
         else:
             markdown = f"# {ticker} Memory\n\nNo living memory file exists yet for {ticker}.\n"
             last_updated = ""
-        sources = [self.compact_result(record) for record in self.evidence_records() if ticker in set(record.get("tickers", [])) or ticker == record.get("primary_ticker")]
-        sources.sort(key=lambda item: item.get("date", ""), reverse=True)
-        return {"ticker": ticker, "last_updated": last_updated, "memory_markdown": markdown, "sources": sources[:20]}
+        evidence = [self.compact_result(record) for record in self.evidence_records() if ticker in set(record.get("tickers", [])) or ticker == record.get("primary_ticker")]
+        evidence.sort(key=lambda item: item.get("date", ""), reverse=True)
+        return {"ticker": ticker, "last_updated": last_updated, "memory_markdown": markdown, "evidence": evidence[:20]}
 
     def timeline(self, payload: dict[str, Any]) -> dict[str, Any]:
         ticker = str(payload.get("ticker") or "").upper().lstrip("$")
@@ -377,10 +377,10 @@ def openapi_schema(base_url: str) -> dict[str, Any]:
         "info": {"title": "Investment Evidence Tool API", "version": "0.1.0"},
         "servers": [{"url": base_url.rstrip("/")}],
         "paths": {
-            "/source/search": {
+            "/feed/search": {
                 "post": {
                     "operationId": "searchEvidence",
-                    "summary": "Search evidence across captured source documents.",
+                    "summary": "Search evidence across captured feed documents.",
                     "requestBody": {
                         "required": True,
                         "content": {
@@ -392,7 +392,7 @@ def openapi_schema(base_url: str) -> dict[str, Any]:
                                         "tickers": {"type": "array", "items": {"type": "string"}},
                                         "date_from": {"type": "string"},
                                         "date_to": {"type": "string"},
-                                        "source_types": {"type": "array", "items": {"type": "string"}},
+                                        "feed_types": {"type": "array", "items": {"type": "string"}},
                                         "limit": {"type": "integer", "default": 10},
                                     },
                                     "required": ["query"],
@@ -400,26 +400,26 @@ def openapi_schema(base_url: str) -> dict[str, Any]:
                             }
                         },
                     },
-                    "responses": {"200": {"description": "Relevant evidence results with source links."}},
+                    "responses": {"200": {"description": "Relevant evidence results with feed links."}},
                 }
             },
-            "/source/thread/{thread_id}": {
+            "/feed/thread/{thread_id}": {
                 "get": {
                     "operationId": "getThread",
-                    "summary": "Return one compiled thread with posts, media, and source URLs.",
+                    "summary": "Return one compiled thread with posts, media, and feed URLs.",
                     "parameters": [{"name": "thread_id", "in": "path", "required": True, "schema": {"type": "string"}}],
                     "responses": {"200": {"description": "Compiled thread evidence."}},
                 }
             },
-            "/source/ticker/{ticker}/memory": {
+            "/feed/ticker/{ticker}/memory": {
                 "get": {
                     "operationId": "getTickerMemory",
                     "summary": "Return living memory and recent evidence for a ticker.",
                     "parameters": [{"name": "ticker", "in": "path", "required": True, "schema": {"type": "string"}}],
-                    "responses": {"200": {"description": "Ticker memory with sources."}},
+                    "responses": {"200": {"description": "Ticker memory with evidence."}},
                 }
             },
-            "/source/timeline": {
+            "/feed/timeline": {
                 "post": {
                     "operationId": "getTimeline",
                     "summary": "Return a ticker timeline for a date range.",
@@ -442,10 +442,10 @@ def openapi_schema(base_url: str) -> dict[str, Any]:
                     "responses": {"200": {"description": "Ticker timeline events."}},
                 }
             },
-            "/source/recent-signals": {
+            "/feed/recent-signals": {
                 "post": {
                     "operationId": "getRecentSignals",
-                    "summary": "Return recent source action signals by priority.",
+                    "summary": "Return recent feed action signals by priority.",
                     "requestBody": {
                         "required": True,
                         "content": {
@@ -574,8 +574,8 @@ class InvestmentToolActionHandler(BaseHTTPRequestHandler):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the investment evidence Action backend.")
-    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
-    parser.add_argument("--source-id", default="")
+    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-id", default="")
     parser.add_argument("--data-dir", default="")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -584,7 +584,7 @@ def main() -> int:
     args = parser.parse_args()
 
     load_env(Path(args.env_file).expanduser())
-    configure_source(load_x_source_profile(args.source_config, args.source_id))
+    configure_feed(load_x_feed_profile(args.feed_config, args.feed_id))
     public_base_url = (
         args.public_base_url
         or os.environ.get("INVESTMENT_TOOL_PUBLIC_BASE_URL")

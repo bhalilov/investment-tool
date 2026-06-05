@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from investment_tool.analysis.openai import call_responses_json
-from investment_tool.runtime.config import SourceProfile, load_prompt, load_x_source_profile, read_json, source_identity
+from investment_tool.runtime.config import FeedProfile, load_prompt, load_x_feed_profile, read_json, feed_identity
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
@@ -25,12 +25,12 @@ DEFAULT_OPENAI_MODEL = "gpt-5.5"
 DEFAULT_PROMPT_PATH = "prompts/media_description.md"
 DEFAULT_SCHEMA_PATH = "schemas/media_description.schema.json"
 SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-SOURCE_PROFILE: SourceProfile = load_x_source_profile()
+FEED_PROFILE: FeedProfile = load_x_feed_profile()
 
 
-def configure_source(profile: SourceProfile) -> None:
-    global SOURCE_PROFILE
-    SOURCE_PROFILE = profile
+def configure_feed(profile: FeedProfile) -> None:
+    global FEED_PROFILE
+    FEED_PROFILE = profile
 
 
 def iso_now() -> str:
@@ -107,7 +107,7 @@ def analyze_media_with_openai(
         model=model,
         system_prompt=(
             "You perform neutral OCR and visual description for investment screenshots. "
-            "Never infer trading action or source-account intent. Output valid JSON only."
+            "Never infer trading action or feed-account intent. Output valid JSON only."
         ),
         user_content=[
             {"type": "input_text", "text": build_media_prompt(path, prompt_text)},
@@ -125,7 +125,7 @@ def build_record(path: Path, analysis: dict[str, Any] | None, model: str) -> dic
     stat = path.stat()
     return {
         "media_key": media_key(path),
-        "source_path": portable_path(path),
+        "original_path": portable_path(path),
         "filename": path.name,
         "mime_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
         "file_size": stat.st_size,
@@ -134,7 +134,7 @@ def build_record(path: Path, analysis: dict[str, Any] | None, model: str) -> dic
         "authority": "visual_extraction",
         "ocr_or_description_only": True,
         "model": model,
-        "source": source_identity(SOURCE_PROFILE),
+        "feed": feed_identity(FEED_PROFILE),
         "analyzed_at": iso_now() if analysis else "",
         "analysis": analysis,
     }
@@ -142,7 +142,7 @@ def build_record(path: Path, analysis: dict[str, Any] | None, model: str) -> dic
 
 def sync_media_analysis(args: argparse.Namespace) -> int:
     load_env(Path(args.env).expanduser())
-    configure_source(load_x_source_profile(args.source_config, args.source_id))
+    configure_feed(load_x_feed_profile(args.feed_config, args.feed_id))
     storage = storage_paths()
     model = args.model or os.environ.get("OPENAI_MEDIA_MODEL") or DEFAULT_OPENAI_MODEL
     prompt = load_prompt(args.prompt)
@@ -230,8 +230,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--media-dir", default="")
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--env", default=".env")
-    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
-    parser.add_argument("--source-id", default="")
+    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-id", default="")
     parser.add_argument("--model", default="")
     parser.add_argument("--prompt", default=DEFAULT_PROMPT_PATH)
     parser.add_argument("--schema", default=DEFAULT_SCHEMA_PATH)

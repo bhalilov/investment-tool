@@ -1,6 +1,6 @@
 """X media ownership and placeholder helpers."""
 
-from investment_tool.sources.x.threads import (  # noqa: F401
+from investment_tool.feeds.x.threads import (  # noqa: F401
     media_keys,
     media_placeholder_tags,
     missing_media_keys,

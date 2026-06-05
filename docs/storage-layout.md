@@ -2,7 +2,7 @@
 
 This document describes the canonical runtime storage layout. Naming follows
 the same rules as code: folder context carries meaning, child names stay short,
-and source-specific names stay under `sources`.
+and feed-specific names stay under `feeds`.
 
 The project is split into two clean places:
 
@@ -20,7 +20,7 @@ committed.
 
 ```text
 <data>/
-├── sources/
+├── feeds/
 │   ├── x/
 │   │   ├── raw/
 │   │   ├── records/
@@ -61,17 +61,17 @@ committed.
 
 | Location | Owner/stage | Purpose |
 | --- | --- | --- |
-| `sources/x/raw` | `x-capture`, `x-raw` | Saved X API responses by run |
-| `sources/x/records` | `x-capture`, `x-raw` | Clean X thread source records |
-| `sources/x/media` | `x-capture` | Downloaded X photo/image media |
-| `sources/x/ignored` | `x-capture`, `x-raw`, `render` | Skipped thread records |
-| `sources/x/usage` | `x-capture` | Local API usage estimates |
-| `sources/articles/archive` | `articles` | Saved article archive input |
-| `sources/articles/records` | `articles` | Normalized article source records |
-| `sources/articles/manifest.json` | `articles` | Article ingest manifest |
-| `sources/screenshots/inbox` | `screenshots` | Manual screenshot import inbox |
-| `sources/screenshots/bundles` | `screenshots` | Imported screenshot bundle records |
-| `sources/screenshots/media` | `screenshots` | Copied screenshot files by bundle |
+| `feeds/x/raw` | `x-capture`, `x-raw` | Saved X API responses by run |
+| `feeds/x/records` | `x-capture`, `x-raw` | Clean X thread feed records |
+| `feeds/x/media` | `x-capture` | Downloaded X photo/image media |
+| `feeds/x/ignored` | `x-capture`, `x-raw`, `render` | Skipped thread records |
+| `feeds/x/usage` | `x-capture` | Local API usage estimates |
+| `feeds/articles/archive` | `articles` | Saved article archive input |
+| `feeds/articles/records` | `articles` | Normalized article feed records |
+| `feeds/articles/manifest.json` | `articles` | Article ingest manifest |
+| `feeds/screenshots/inbox` | `screenshots` | Manual screenshot import inbox |
+| `feeds/screenshots/bundles` | `screenshots` | Imported screenshot bundle records |
+| `feeds/screenshots/media` | `screenshots` | Copied screenshot files by bundle |
 | `context/prices/daily` | `prices` | Current implemented USD-normalized daily OHLCV bars |
 | `context/prices/hourly` | `prices` | Planned recent hourly bars |
 | `context/prices/intraday` | `prices` | Planned recent 15-minute bars |
@@ -95,7 +95,7 @@ This keeps the data usable even if it is inspected without the codebase open.
 ## Temporary Folders
 
 Some maintenance jobs may create short-lived staging folders such as
-`sources/x/rebuild` or `sources/x/backups`. These are not part of the normal
+`feeds/x/rebuild` or `feeds/x/backups`. These are not part of the normal
 steady-state tree and should be empty or absent after the maintenance job is
 verified.
 
@@ -106,5 +106,5 @@ paths through `runtime/paths.py`.
 ## Repo Package Layout
 
 Runtime storage mirrors the package hierarchy documented in
-`docs/code-organization-spec.md`: `sources`, `context`, `presentation`,
+`docs/code-organization-spec.md`: `feeds`, `context`, `presentation`,
 `retrieval`, and `workflow` are both code concepts and storage concepts.

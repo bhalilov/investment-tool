@@ -32,8 +32,8 @@ from investment_tool.runtime.reporting import start_reporter
 
 
 DEFAULT_OPENAI_MODEL = "gpt-5.5"
-DEFAULT_SOURCE_CONFIG = "config/sources/web_archives.json"
-ARTICLE_SOURCE: dict[str, Any] = {}
+DEFAULT_FEED_CONFIG = "config/feeds/web_archives.json"
+ARTICLE_FEED: dict[str, Any] = {}
 
 SIGNAL_VALUES = {
     "BUY_SIGNAL",
@@ -55,40 +55,40 @@ TIME_HORIZON_VALUES = {"INTRADAY", "DAYS", "WEEKS", "MONTHS", "YEARS", "UNCLEAR"
 PRIORITY_VALUES = {"P0", "P1", "P2", "P3", "P4"}
 
 
-def load_article_source(config_path: str | Path = DEFAULT_SOURCE_CONFIG, source_id: str = "") -> dict[str, Any]:
+def load_article_feed(config_path: str | Path = DEFAULT_FEED_CONFIG, feed_id: str = "") -> dict[str, Any]:
     config = read_json(config_path)
-    wanted = source_id or str(config.get("default_source_id") or "")
-    for source in config.get("sources") or []:
-        if source.get("source_id") == wanted:
-            return dict(source)
-    raise ValueError(f"Article source profile not found: {wanted or '<default>'}")
+    wanted = feed_id or str(config.get("default_feed_id") or "")
+    for feed in config.get("feeds") or []:
+        if feed.get("feed_id") == wanted:
+            return dict(feed)
+    raise ValueError(f"Article feed profile not found: {wanted or '<default>'}")
 
 
-def configure_article_source(source: dict[str, Any]) -> None:
-    global ARTICLE_SOURCE
-    ARTICLE_SOURCE = source
+def configure_article_feed(feed: dict[str, Any]) -> None:
+    global ARTICLE_FEED
+    ARTICLE_FEED = feed
 
 
-def article_source_name() -> str:
-    return str(ARTICLE_SOURCE.get("display_name") or "configured web archive")
+def article_feed_name() -> str:
+    return str(ARTICLE_FEED.get("display_name") or "configured web archive")
 
 
-def article_source_storage_path(name: str, fallback: Path) -> Path:
-    storage = ARTICLE_SOURCE.get("storage") or {}
+def article_feed_storage_path(name: str, fallback: Path) -> Path:
+    storage = ARTICLE_FEED.get("storage") or {}
     value = storage.get(name)
     return resolve_portable_path(str(value)) if value else fallback
 
 
-def article_source_record() -> dict[str, Any]:
+def article_feed_record() -> dict[str, Any]:
     return {
-        "source_id": ARTICLE_SOURCE.get("source_id") or "",
-        "source_type": ARTICLE_SOURCE.get("source_type") or "web_article_archive",
-        "module": ARTICLE_SOURCE.get("module") or "articles",
-        "display_name": article_source_name(),
+        "feed_id": ARTICLE_FEED.get("feed_id") or "",
+        "feed_type": ARTICLE_FEED.get("feed_type") or "web_article_archive",
+        "module": ARTICLE_FEED.get("module") or "articles",
+        "display_name": article_feed_name(),
     }
 
 
-configure_article_source(load_article_source())
+configure_article_feed(load_article_feed())
 
 
 def iso_now() -> str:
@@ -217,7 +217,7 @@ def extract_html_text(path: Path) -> tuple[str, dict[str, Any]]:
     raw = path.read_text(encoding="utf-8", errors="replace")
     parser.feed(raw)
     text = parser.text()
-    for pattern in ARTICLE_SOURCE.get("html_cleanup_patterns") or []:
+    for pattern in ARTICLE_FEED.get("html_cleanup_patterns") or []:
         text = re.sub(str(pattern), "", text, flags=re.I | re.S)
     text = clean_text(text)
     return text, {
@@ -263,10 +263,10 @@ def article_fingerprint(item: dict[str, Any], html_meta: dict[str, Any], text: s
 
 
 def build_ai_prompt(item: dict[str, Any], text: str, html_meta: dict[str, Any]) -> str:
-    analysis_notes = [str(note) for note in ARTICLE_SOURCE.get("analysis_notes") or []]
+    analysis_notes = [str(note) for note in ARTICLE_FEED.get("analysis_notes") or []]
     return "\n".join(
         [
-            f"Analyze this article from the configured web archive source: {article_source_name()}.",
+            f"Analyze this article from the configured web archive feed: {article_feed_name()}.",
             *analysis_notes,
             "Extract what would help a later AI compare X posts against older article context.",
             "Keep the output compact: summary under 90 words; arrays up to 5 short bullets; evidence up to 4 short quotes/paraphrases.",
@@ -275,7 +275,7 @@ def build_ai_prompt(item: dict[str, Any], text: str, html_meta: dict[str, Any]) 
             f"Index: {item.get('index')}",
             f"Title: {item.get('title')}",
             f"Date: {item.get('date')}",
-            f"Source URL: {item.get('url')}",
+            f"Original URL: {item.get('url')}",
             f"HTML title: {html_meta.get('html_title') or ''}",
             f"Image alt text: {json.dumps(html_meta.get('image_alt_texts') or [], ensure_ascii=False)}",
             "",
@@ -345,7 +345,7 @@ def analyze_article_with_openai(
             api_key=api_key,
             model=model,
             system_prompt=(
-                "You classify configured-source web archive articles for a private investment archive. "
+                "You classify configured-feed web archive articles for a private investment archive. "
                 "Use text only. Never request OCR. Output valid JSON only."
             ),
             user_content=[{"type": "input_text", "text": build_ai_prompt(item, text, html_meta)}],
@@ -369,13 +369,14 @@ def markdown_list(values: Any) -> list[str]:
 def render_markdown(record: dict[str, Any]) -> str:
     analysis = record.get("analysis") if isinstance(record.get("analysis"), dict) else {}
     title = clean_text(analysis.get("readable_title") or record.get("title") or "Hardcore Article")
-    source = record.get("source") if isinstance(record.get("source"), dict) else article_source_record()
+    feed = record.get("feed") if isinstance(record.get("feed"), dict) else {}
+    feed = feed if isinstance(feed, dict) else article_feed_record()
     lines = [
         f"# {title}",
         "",
-        f"Source Type: hardcore_article",
-        f"Source Profile ID: {source.get('source_id') or ''}",
-        f"Source Display Name: {source.get('display_name') or ''}",
+        f"Feed Type: article",
+        f"Feed Profile ID: {feed.get('feed_id') or ''}",
+        f"Feed Display Name: {feed.get('display_name') or ''}",
         f"Article ID: {record.get('article_id')}",
         f"Article Index: {record.get('index')}",
         f"Date: {record.get('date_iso') or record.get('date')}",
@@ -524,7 +525,7 @@ def process_articles(args: argparse.Namespace) -> int:
             "html_meta": html_meta,
             "analysis": analysis,
             "fingerprint": fingerprint,
-            "source": article_source_record(),
+            "feed": article_feed_record(),
             "captured_by": "manual_archive",
             "updated_at": iso_now(),
             "ocr_used": False,
@@ -572,8 +573,8 @@ def process_articles(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ingest manually captured web-archive articles.")
-    parser.add_argument("--source-config", default=DEFAULT_SOURCE_CONFIG)
-    parser.add_argument("--source-id", default="")
+    parser.add_argument("--feed-config", default=DEFAULT_FEED_CONFIG)
+    parser.add_argument("--feed-id", default="")
     parser.add_argument("--archive-dir", default="")
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--records-dir", default="")
@@ -589,18 +590,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     load_env(Path(args.env))
-    configure_article_source(load_article_source(args.source_config, args.source_id))
+    configure_article_feed(load_article_feed(args.feed_config, args.feed_id))
     storage = storage_paths()
     if not args.archive_dir:
-        args.archive_dir = str(article_source_storage_path("archive_dir", storage.articles_archive))
+        args.archive_dir = str(article_feed_storage_path("archive_dir", storage.articles_archive))
     if not args.records_dir:
-        args.records_dir = str(article_source_storage_path("records_dir", storage.articles_records))
+        args.records_dir = str(article_feed_storage_path("records_dir", storage.articles_records))
     if not args.evidence_dir:
-        args.evidence_dir = str(article_source_storage_path("evidence_dir", storage.legacy_articles_evidence))
+        args.evidence_dir = str(article_feed_storage_path("evidence_dir", storage.legacy_articles_evidence))
     if not args.manifest:
-        args.manifest = str(article_source_storage_path("manifest_path", storage.articles_manifest))
+        args.manifest = str(article_feed_storage_path("manifest_path", storage.articles_manifest))
     if not args.output_dir:
-        args.output_dir = str(article_source_storage_path("output_dir", storage.articles_root))
+        args.output_dir = str(article_feed_storage_path("output_dir", storage.articles_root))
     if args.download:
         download_placeholder(args)
     return process_articles(args)

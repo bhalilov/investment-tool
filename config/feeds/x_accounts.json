@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "default_source_id": "x_research_account_001",
-  "sources": [
+  "default_feed_id": "x_research_account_001",
+  "feeds": [
     {
-      "source_id": "x_research_account_001",
+      "feed_id": "x_research_account_001",
       "platform": "x",
       "module": "x-capture",
       "enabled": true,
@@ -47,7 +47,7 @@
           "aj-investment-research.ghost.io"
         ],
         "legacy_evidence_headings": {
-          "source_posts": [
+          "feed_posts": [
             "AJ Posts"
           ],
           "questions_answered": [

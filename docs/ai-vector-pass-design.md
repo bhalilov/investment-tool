@@ -12,7 +12,7 @@ Phase 1 thread AI does not use vector search initially.
 
 Reason:
 
-- the stripped pre-AI thread JSON is source material, not clean evidence;
+- the stripped pre-AI thread JSON is feed material, not clean evidence;
 - searching raw or weakly parsed thread data would add noise;
 - current high-confidence JSON fields are not themselves useful semantic vector
   queries;
@@ -21,10 +21,10 @@ Reason:
 
 ## Phase 1 Inputs
 
-Phase 1 should read direct, local source context:
+Phase 1 should read direct, local feed context:
 
 - clean raw thread JSON;
-- source profile and source-specific interpretation notes;
+- feed profile and feed-specific interpretation notes;
 - thread reconstruction rules;
 - media rules;
 - thread-local media descriptions;
@@ -41,7 +41,7 @@ Phase 1 should not:
 
 Phase 1 output should be clean evidence:
 
-- source claims;
+- feed claims;
 - answered questions;
 - candidate timeline events;
 - portfolio/action clues as vague evidence;
@@ -107,7 +107,7 @@ is historical evidence, not a current PLTR recommendation.
 
 Vector evidence should carry date metadata such as:
 
-- source id;
+- feed id;
 - evidence type;
 - thread id;
 - thread date;
@@ -121,10 +121,10 @@ Vector evidence should carry date metadata such as:
 
 The vector design should likely use more than one evidence shape:
 
-- thread-level evidence documents for readable source context;
+- thread-level evidence documents for readable feed context;
 - timeline event documents for precise dated memory;
 - correction documents for human overrides;
-- static context documents for HC/manual/market sources.
+- static context documents for HC/manual/market feeds.
 
 This is not finalized yet.
 
@@ -134,9 +134,9 @@ Phase 2 and future production incremental runs need a controlled retrieval
 profile. Search terms should come from meaningful text and questions, while
 metadata fields act as filters.
 
-Meaningful query sources:
+Meaningful query inputs:
 
-- source-authored claims;
+- feed-authored claims;
 - answered parent questions;
 - tickers and company aliases;
 - linked context needs;
@@ -145,13 +145,13 @@ Meaningful query sources:
 
 Filters and safety rails:
 
-- source id;
-- source type;
+- feed id;
+- feed type;
 - date window;
 - ticker when high-confidence;
 - exclude current thread id.
 
-Metadata fields like `source_id`, `source_type`, and `thread_id` are not useful
+Metadata fields like `feed_id`, `feed_type`, and `thread_id` are not useful
 search text by themselves. They are relevance controls.
 
 ## Open Decisions

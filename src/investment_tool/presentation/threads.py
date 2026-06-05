@@ -10,7 +10,7 @@ from typing import Any
 
 from investment_tool.presentation.html import display_token, linkify_text
 from investment_tool.runtime.paths import resolve_portable_path
-from investment_tool.sources.x.threads import display_text, media_keys
+from investment_tool.feeds.x.threads import display_text, media_keys
 
 
 def tweet_url(tweet_id: str, username: str) -> str:
@@ -24,8 +24,8 @@ def author(tweet: dict[str, Any], users: dict[str, dict]) -> str:
 
 
 def date_prefix(tweet: dict[str, Any] | None, items: list[dict[str, Any]]) -> str:
-    source = tweet or (items[0] if items else {})
-    created = source.get("created_at") or ""
+    item = tweet or (items[0] if items else {})
+    created = item.get("created_at") or ""
     return created[:10].replace("-", "") if len(created) >= 10 else dt.datetime.now().strftime("%Y%m%d")
 
 
@@ -46,8 +46,8 @@ def render_thread_html(
     media_paths: dict[str, str],
     search_count: int,
     root_dir: Path,
-    source_username: str,
-    source_user_id: str,
+    feed_username: str,
+    feed_user_id: str,
 ) -> None:
     all_index_rel = os.path.relpath(root_dir / "indexes" / "index.html", path.parent)
     type_index_rel = os.path.relpath(root_dir / "indexes" / "by_type" / f"{thread_type}.html", path.parent)
@@ -64,7 +64,7 @@ def render_thread_html(
         refs = ", ".join(f"{r.get('type')}:{r.get('id')}" for r in item.get("referenced_tweets") or []) or "none"
         metrics = item.get("public_metrics") or {}
         is_quote_context = item.get("id") != conversation_id and item.get("conversation_id") != conversation_id
-        classes = "tweet quote-context" if is_quote_context else ("tweet source" if item.get("author_id") == source_user_id else "tweet")
+        classes = "tweet quote-context" if is_quote_context else ("tweet feed" if item.get("author_id") == feed_user_id else "tweet")
         context_label = "<div class='context-label'>Quoted context</div>" if is_quote_context else ""
         note = " | full note_tweet rendered" if (item.get("note_tweet") or {}).get("text") else ""
         media_html: list[str] = []
@@ -128,7 +128,7 @@ def render_thread_html(
         return f"<dt>{html.escape(name)}</dt><dd><ul>{items_html}</ul></dd>"
 
     json_rel = os.path.relpath(json_path, path.parent)
-    root_link = tweet_url(conversation_id, source_username)
+    root_link = tweet_url(conversation_id, feed_username)
     analysis_ready = bool(analysis_metadata.get("analysis_ready"))
     summary_label = analysis_metadata.get("summary_label") or ("TLDR" if analysis_ready else "Preview")
     analysis_stage = display_token(str(analysis_metadata.get("analysis_stage") or "captured_pending_ai_pass1"))
@@ -171,7 +171,7 @@ def render_thread_html(
     .pill.muted {{ color: #536471; background: #f8fafc; }}
     .note {{ background: #fff6cc; border: 1px solid #ead36a; padding: 10px 12px; border-radius: 6px; }}
     .tweet {{ border: 1px solid #d8e0e8; border-radius: 8px; padding: 14px; margin: 14px 0; max-width: 980px; }}
-    .tweet.source {{ border-left: 5px solid #1d9bf0; }}
+    .tweet.feed {{ border-left: 5px solid #1d9bf0; }}
     .tweet.quote-context {{ border-left: 5px solid #8b5cf6; background: #fbfaff; }}
     .context-label {{ color: #6d28d9; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }}
     .head {{ display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }}
@@ -195,7 +195,7 @@ def render_thread_html(
       <dt>Mentioned only</dt><dd>{mentioned_links}</dd>
       <dt>Tags</dt><dd>{tag_links}</dd>
       <dt>Type</dt><dd>{html.escape(thread_type)}</dd>
-      <dt>Posts</dt><dd>{len(items)} captured, {sum(1 for item in items if item.get("author_id") == source_user_id)} by source, conversation-search results {search_count}</dd>
+      <dt>Posts</dt><dd>{len(items)} captured, {sum(1 for item in items if item.get("author_id") == feed_user_id)} by feed, conversation-search results {search_count}</dd>
       <dt>Evidence</dt><dd><a href="{html.escape(json_rel)}">local JSON</a> / <a href="{html.escape(root_link)}">X root</a></dd>
       {detail_list("Evidence notes", analysis_metadata.get("evidence") or [])}
       {detail_list("Ambiguities", analysis_metadata.get("ambiguities") or [])}

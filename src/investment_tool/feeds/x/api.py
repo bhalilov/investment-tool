@@ -276,7 +276,7 @@ def fetch_tweets_by_ids_even_if_cached(
 
 def fetch_timeline(
     client: XClient,
-    source_user_id: str,
+    feed_user_id: str,
     pages: int,
     tweets: dict[str, dict],
     users: dict[str, dict],
@@ -288,7 +288,7 @@ def fetch_timeline(
         params = tweet_params(max_results=100)
         if pagination_token:
             params["pagination_token"] = pagination_token
-        response = client.get(f"/users/{source_user_id}/tweets", params, f"source_timeline_page_{page + 1}")
+        response = client.get(f"/users/{feed_user_id}/tweets", params, f"feed_timeline_page_{page + 1}")
         merge_response(response, tweets, users, media)
         for item in response.get("data") or []:
             seed_ids.append(item["id"])

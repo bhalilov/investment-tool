@@ -12,8 +12,8 @@ from typing import Any
 from investment_tool.runtime.paths import portable_path
 from investment_tool.rules.filters import primary_label
 from investment_tool.rules.tickers import ticker_bucket_payload
-from investment_tool.sources.x.context import XCaptureContext
-from investment_tool.sources.x.metadata import (
+from investment_tool.feeds.x.context import XCaptureContext
+from investment_tool.feeds.x.metadata import (
     classify_thread,
     compact_text,
     ignore_reason,
@@ -24,13 +24,13 @@ from investment_tool.sources.x.metadata import (
     root_primary_tickers,
     rough_tldr,
     safe_slug,
-    source_conversation_tickers,
+    feed_conversation_tickers,
     thread_created_at,
     thread_title,
     title_with_label_prefix,
 )
-from investment_tool.sources.x.raw import load_raw_api_archive
-from investment_tool.sources.x.threads import (
+from investment_tool.feeds.x.raw import load_raw_api_archive
+from investment_tool.feeds.x.threads import (
     display_text,
     existing_local_media_paths,
     missing_media_keys,
@@ -88,10 +88,10 @@ def clean_raw_rebuilt_thread_record(
 ) -> tuple[dict[str, Any], str, str]:
     root_tweet = tweets.get(conversation_id)
     title, slug = thread_title(root_tweet, items)
-    source_items = [item for item in items if item.get("author_id") == context.user_id]
+    feed_items = [item for item in items if item.get("author_id") == context.user_id]
     op_tickers = root_post_tickers(root_tweet)
     metadata_tickers = root_primary_tickers(root_tweet)
-    relevance_tickers = source_conversation_tickers(root_tweet, items, context)
+    relevance_tickers = feed_conversation_tickers(root_tweet, items, context)
     thread_type = classify_thread(root_tweet, items, context)
     local_media = thread_local_media(media, items)
     local_paths = thread_local_media_paths(all_media_paths, items)
@@ -121,12 +121,12 @@ def clean_raw_rebuilt_thread_record(
         "media_paths": local_paths,
         "non_photo_media": non_photo_media_placeholders(items, local_media, context),
         "missing_media": missing_media_keys(items, local_media, local_paths),
-        "source": context.source_record(kind="saved_x_raw_api_rebuild", raw_api_used=True, x_api_called=False),
+        "feed": context.feed_record(kind="saved_x_raw_api_rebuild", raw_api_used=True, x_api_called=False),
     }
     if reason:
         record["ignored"] = True
         record["ignored_reason"] = reason
-        record["sample_text"] = compact_text(display_text(source_items[0] if source_items else root_tweet or {}), 500)
+        record["sample_text"] = compact_text(display_text(feed_items[0] if feed_items else root_tweet or {}), 500)
     return record, filename, reason or ""
 
 

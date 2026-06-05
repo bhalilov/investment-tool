@@ -1,4 +1,4 @@
-"""Render source-aware local HTML indexes for captured evidence."""
+"""Render feed-aware local HTML indexes for captured evidence."""
 
 from __future__ import annotations
 
@@ -13,19 +13,19 @@ from typing import Any
 from investment_tool.presentation.html import display_token
 
 
-def source_display(entry: dict[str, Any]) -> str:
+def feed_display(entry: dict[str, Any]) -> str:
     return str(
-        entry.get("source_display")
-        or entry.get("source_label")
-        or entry.get("source_platform")
-        or entry.get("source")
+        entry.get("feed_display")
+        or entry.get("feed_label")
+        or entry.get("feed_platform")
+        or entry.get("feed")
         or "X"
     )
 
 
-def source_slug(value: str) -> str:
+def feed_slug(value: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9]+", "-", value.lower()).strip("-")
-    return slug[:90] or "source"
+    return slug[:90] or "feed"
 
 
 def render_index(path: Path, entries: list[dict[str, Any]], title: str = "Thread Capture Index") -> None:
@@ -43,13 +43,13 @@ def render_index(path: Path, entries: list[dict[str, Any]], title: str = "Thread
         primary_ticker = entry.get("primary_ticker") or (tickers[0] if tickers else "UNKNOWN")
         flags = entry.get("flags") or []
         category = entry.get("category") or ""
-        source_text = source_display(entry)
-        source_href = index_rel("by_source", f"{source_slug(source_text)}.html")
+        feed_text = feed_display(entry)
+        feed_href = index_rel("by_feed", f"{feed_slug(feed_text)}.html")
         records.append(
             {
                 "date": entry.get("created_at") or entry["date"],
-                "source": source_text,
-                "sourceHref": source_href,
+                "feed": feed_text,
+                "feedHref": feed_href,
                 "priority": entry.get("priority") or "Pending",
                 "signal": entry.get("signal") or "Pending",
                 "ticker": primary_ticker,
@@ -73,7 +73,7 @@ def render_index(path: Path, entries: list[dict[str, Any]], title: str = "Thread
                 else [],
                 "tagText": " ".join(tags),
                 "posts": entry["posts"],
-                "sourcePosts": entry["source_posts"],
+                "feedPosts": entry["feed_posts"],
                 "photos": entry["photos"],
             }
         )
@@ -116,7 +116,7 @@ h1{{font-size:20px;line-height:1.2;margin:0;letter-spacing:0}}
 .pill.type,.pill.tag{{background:#f8fafc;color:#34495e;border-color:#d7e0ea}}
 .pill.owned{{border-color:#0f766e;background:#e8f7f4;color:#075e57;font-weight:750}}
 .pill.muted{{color:#6b7c8f;background:#f7f9fb}}
-.source-label{{color:#34495e;font-weight:650}}
+.feed-label{{color:#34495e;font-weight:650}}
 .num{{font-variant-numeric:tabular-nums;text-align:right;display:block}}
 .fallback{{display:none;margin:12px 0;padding:10px 12px;border:1px solid #f0c36d;background:#fff7da;border-radius:6px;color:#594100}}
 </style></head>
@@ -134,7 +134,7 @@ h1{{font-size:20px;line-height:1.2;margin:0;letter-spacing:0}}
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script>
 const tableData = {records_json};
-tableData.sort((a, b) => b.date.localeCompare(a.date) || a.source.localeCompare(b.source) || a.ticker.localeCompare(b.ticker) || a.title.localeCompare(b.title));
+tableData.sort((a, b) => b.date.localeCompare(a.date) || a.feed.localeCompare(b.feed) || a.ticker.localeCompare(b.ticker) || a.title.localeCompare(b.title));
 function escapeHtml(value) {{
   return String(value ?? '').replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
 }}
@@ -211,7 +211,7 @@ if (!window.Tabulator) {{
     placeholder: 'No matching threads',
     columns: [
       {{title: 'Date', field: 'date', width: 92, sorter: 'string', headerFilter: 'input', headerFilterFunc: containsFilter, formatter: cell => dateHtml(cell.getValue())}},
-      {{title: 'Source', field: 'source', width: 150, headerFilter: 'input', headerFilterFunc: containsFilter, formatter: cell => `<a class='source-label' href='${{escapeHtml(cell.getRow().getData().sourceHref)}}'>${{escapeHtml(cell.getValue())}}</a>`}},
+      {{title: 'Feed', field: 'feed', width: 150, headerFilter: 'input', headerFilterFunc: containsFilter, formatter: cell => `<a class='feed-label' href='${{escapeHtml(cell.getRow().getData().feedHref)}}'>${{escapeHtml(cell.getValue())}}</a>`}},
       {{title: 'Priority', field: 'priority', width: 86, headerFilter: 'input', headerFilterFunc: containsFilter, formatter: cell => priorityHtml(cell.getValue())}},
       {{title: 'Signal', field: 'signal', width: 132, headerFilter: 'input', headerFilterFunc: containsFilter, formatter: cell => signalHtml(cell.getValue())}},
       {{title: 'Tickers', field: 'tickerText', width: 150, headerFilter: 'input', headerFilterFunc: containsFilter, formatter: cell => pillHtml(cell.getRow().getData().tickers, '')}},
@@ -221,7 +221,7 @@ if (!window.Tabulator) {{
       {{title: 'Score >=', field: 'score', width: 86, hozAlign: 'right', sorter: 'number', headerFilter: 'input', headerFilterFunc: numberAtLeast, formatter: cell => `<span class='num'>${{cell.getValue()}}</span>`}},
       {{title: 'Flags', field: 'flagsText', width: 190, headerFilter: 'input', headerFilterFunc: containsFilter, formatter: cell => pillHtml(cell.getRow().getData().flags, 'tag')}},
       {{title: 'Posts >=', field: 'posts', width: 82, hozAlign: 'right', sorter: 'number', headerFilter: 'input', headerFilterFunc: numberAtLeast, formatter: cell => `<span class='num'>${{cell.getValue()}}</span>`}},
-      {{title: 'Source >=', field: 'sourcePosts', width: 72, hozAlign: 'right', sorter: 'number', headerFilter: 'input', headerFilterFunc: numberAtLeast, formatter: cell => `<span class='num'>${{cell.getValue()}}</span>`}},
+      {{title: 'Feed >=', field: 'feedPosts', width: 72, hozAlign: 'right', sorter: 'number', headerFilter: 'input', headerFilterFunc: numberAtLeast, formatter: cell => `<span class='num'>${{cell.getValue()}}</span>`}},
     ],
   }});
   const count = document.getElementById('visibleCount');
@@ -264,16 +264,16 @@ def render_all_indexes(root: Path, entries: list[dict[str, Any]], owned_tickers:
         "note": "Browser-only UI coloring snapshot. Do not upload as thread evidence.",
     }
     (indexes / "current_owned.json").write_text(json.dumps(owned_snapshot, indent=2), encoding="utf-8")
-    for subdir in ("by_ticker", "by_type", "by_tag", "daily", "by_source"):
+    for subdir in ("by_ticker", "by_type", "by_tag", "daily", "by_feed"):
         for stale in (indexes / subdir).glob("*.html"):
             stale.unlink(missing_ok=True)
     sorted_entries = sorted(entries, key=lambda e: (e.get("created_at") or e["date"], e["label"], e["title"]), reverse=True)
     render_index(indexes / "index.html", sorted_entries, "All Captured Threads")
-    for source in sorted({source_display(entry) for entry in entries}):
+    for feed in sorted({feed_display(entry) for entry in entries}):
         render_index(
-            indexes / "by_source" / f"{source_slug(source)}.html",
-            [e for e in sorted_entries if source_display(e) == source],
-            f"Threads from {source}",
+            indexes / "by_feed" / f"{feed_slug(feed)}.html",
+            [e for e in sorted_entries if feed_display(e) == feed],
+            f"Threads from {feed}",
         )
     for ticker in sorted({ticker for entry in entries for ticker in entry["tickers"]}):
         render_index(indexes / "by_ticker" / f"{ticker}.html", [e for e in sorted_entries if ticker in e["tickers"]], f"Threads for {ticker}")

@@ -1,7 +1,7 @@
 # investment-tool
 
 Local monitoring and evidence-capture tool for configurable investment research
-sources.
+feeds.
 
 ## Current Layout
 
@@ -31,7 +31,7 @@ Read these before changing workflow or AI/vector behavior:
   package logic with different flags.
 - When a prototype becomes useful, move the logic into `src/investment_tool/`
   before relying on it.
-- Source accounts, source-specific interpretation notes, reconstruction rules,
+- Feed accounts, feed-specific interpretation notes, reconstruction rules,
   media rules, model choices, and prompts live under `config/` and `prompts/`.
 - Never print or commit private credentials from `.env`.
 
@@ -50,9 +50,9 @@ investment-tool workflow rebuild --all
 investment-tool workflow check
 investment-tool workflow doctor
 
-investment-tool storage migrate --dry-run
-investment-tool storage migrate --apply
-investment-tool storage migrate --verify-only
+investment-tool storage rename --dry-run
+investment-tool storage rename --apply
+investment-tool storage rename --verify-only
 investment-tool storage clean-old --dry-run
 investment-tool storage clean-old --apply
 ```
@@ -61,10 +61,10 @@ investment-tool storage clean-old --apply
 `check` and `doctor` are read-only inspection aliases in v1. `rebuild` requires
 one or more `--stage` values or explicit `--all`.
 
-`storage migrate` is a rename/move cleanup for runtime data. It also writes
+`storage rename` is a rename/move cleanup for runtime data. It also writes
 plain `README.md` descriptions into the main runtime folders so the data is
 scanable without reading the code. After verification, `storage clean-old`
-deletes obsolete migrated legacy folders and old staging files.
+deletes obsolete old folders and old staging files.
 
 Direct stage commands still exist as compatibility launchers, but new
 production work should start from the `workflow` command group.

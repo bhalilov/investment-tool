@@ -1,0 +1,1 @@
+"""Saved article feed connector."""

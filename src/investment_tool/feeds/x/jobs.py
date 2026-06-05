@@ -12,16 +12,16 @@ from typing import Sequence
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import data_root_for_x_root, portable_path, resolve_portable_path
 from investment_tool.runtime.reporting import start_reporter
-from investment_tool.sources.x.api import XClient, refresh_x_user_token
-from investment_tool.sources.x.capture import (
+from investment_tool.feeds.x.api import XClient, refresh_x_user_token
+from investment_tool.feeds.x.capture import (
     XCaptureOptions,
     prepare_x_capture_paths,
     recover_missing_media_metadata,
     run_live_x_capture,
 )
-from investment_tool.sources.x.context import XCaptureContext, load_x_capture_context
-from investment_tool.sources.x.rebuild import rebuild_from_raw_api
-from investment_tool.sources.x.store import (
+from investment_tool.feeds.x.context import XCaptureContext, load_x_capture_context
+from investment_tool.feeds.x.rebuild import rebuild_from_raw_api
+from investment_tool.feeds.x.store import (
     apply_cached_relevance_gate,
     entries_from_cached_json,
     load_owned_tickers,
@@ -40,8 +40,8 @@ def apply_context_data_root(context: XCaptureContext) -> None:
 
 
 def add_x_common_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
-    parser.add_argument("--source-id", default="")
+    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-id", default="")
     parser.add_argument("--timeline-pages", type=int, default=3)
     parser.add_argument("--conversation-pages", type=int, default=0, help="Override configured conversation page depth.")
     parser.add_argument("--max-threads", type=int, default=20)
@@ -81,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_legacy_x_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Capture configured X source threads into readable local HTML files.")
+    parser = argparse.ArgumentParser(description="Capture configured X feed threads into readable local HTML files.")
     add_x_common_args(parser)
     parser.add_argument("--reindex-only", action="store_true", help="Regenerate indexes from cached JSON without X API calls")
     parser.add_argument("--rerender-only", action="store_true", help="Regenerate thread HTML from cached JSON without X API calls")
@@ -120,7 +120,7 @@ def build_legacy_x_parser() -> argparse.ArgumentParser:
 
 
 def load_x_context_from_args(args: argparse.Namespace) -> XCaptureContext:
-    context = load_x_capture_context(args.source_config, args.source_id)
+    context = load_x_capture_context(args.feed_config, args.feed_id)
     apply_context_data_root(context)
     if args.conversation_pages <= 0:
         args.conversation_pages = int(context.thread_rules.get("conversation_pages") or 5)

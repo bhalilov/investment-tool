@@ -1,1 +1,0 @@
-"""Saved article source connector."""

@@ -13,8 +13,8 @@ from investment_tool.presentation.indexes import render_all_indexes
 from investment_tool.runtime.paths import portable_path, resolve_portable_path
 from investment_tool.rules.tickers import ticker_bucket_payload
 from investment_tool.rules.filters import primary_label
-from investment_tool.sources.x.context import XCaptureContext
-from investment_tool.sources.x.metadata import (
+from investment_tool.feeds.x.context import XCaptureContext
+from investment_tool.feeds.x.metadata import (
     CATEGORY_VALUES,
     PRIORITY_VALUES,
     SIGNAL_VALUES,
@@ -33,12 +33,12 @@ from investment_tool.sources.x.metadata import (
     root_primary_tickers,
     rough_tldr,
     safe_slug,
-    source_conversation_tickers,
+    feed_conversation_tickers,
     thread_created_at,
     thread_title,
     title_with_label_prefix,
 )
-from investment_tool.sources.x.threads import (
+from investment_tool.feeds.x.threads import (
     display_text,
     media_keys,
     thread_local_media,
@@ -128,7 +128,7 @@ def write_ignored_record(root: Path, conversation_id: str, reason: str, data: di
     ignored_dir = root / "ignored"
     ignored_dir.mkdir(parents=True, exist_ok=True)
     tweets = data.get("tweets") or []
-    source_posts = [tweet for tweet in tweets if tweet.get("author_id") == context.user_id]
+    feed_posts = [tweet for tweet in tweets if tweet.get("author_id") == context.user_id]
     root_tweet = next((tweet for tweet in tweets if tweet.get("id") == conversation_id), None)
     record = {
         "conversation_id": conversation_id,
@@ -139,10 +139,10 @@ def write_ignored_record(root: Path, conversation_id: str, reason: str, data: di
         "tickers": data.get("tickers") or [],
         "tags": data.get("tags") or [],
         "posts": len(tweets),
-        "source_posts": len(source_posts),
+        "feed_posts": len(feed_posts),
         "root_author_id": (root_tweet or {}).get("author_id"),
-        "sample_text": compact_text(display_text(source_posts[0] if source_posts else root_tweet or {}), 500),
-        "source": context.source_record(kind="ignored_thread_record"),
+        "sample_text": compact_text(display_text(feed_posts[0] if feed_posts else root_tweet or {}), 500),
+        "feed": context.feed_record(kind="ignored_thread_record"),
         "ignored_at": dt.datetime.now(dt.timezone.utc).isoformat(),
     }
     (ignored_dir / f"{conversation_id}.json").write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -214,9 +214,9 @@ def entries_from_cached_json(json_dir: Path, threads_dir: Path, context: XCaptur
                 "conversation_id": conv_id,
                 "abs_path": str(html_path),
                 "posts": len(tweets),
-                "source_posts": sum(1 for tweet in tweets if tweet.get("author_id") == context.user_id),
+                "feed_posts": sum(1 for tweet in tweets if tweet.get("author_id") == context.user_id),
                 "photos": sum(len(media_keys(tweet)) for tweet in tweets),
-                **context.source_entry_fields(data),
+                **context.feed_entry_fields(data),
             }
         )
     return entries
@@ -276,7 +276,7 @@ def rerender_cached_threads(
         title, _slug = thread_title(root_tweet, items)
         op_tickers = root_post_tickers(root_tweet)
         metadata_tickers = root_primary_tickers(root_tweet)
-        relevance_tickers = source_conversation_tickers(root_tweet, items, context)
+        relevance_tickers = feed_conversation_tickers(root_tweet, items, context)
         thread_type = classify_thread(root_tweet, items, context)
         tags = list(dict.fromkeys(infer_tags(items, thread_type, metadata_tickers, context) + media_placeholder_tags(items, local_media, context)))
         label = primary_label(metadata_tickers, tags)
@@ -360,9 +360,9 @@ def rerender_cached_threads(
                 "conversation_id": conv_id,
                 "abs_path": str(html_path),
                 "posts": len(items),
-                "source_posts": sum(1 for item in items if item.get("author_id") == context.user_id),
+                "feed_posts": sum(1 for item in items if item.get("author_id") == context.user_id),
                 "photos": sum(len(media_keys(item)) for item in items),
-                **context.source_entry_fields(updated),
+                **context.feed_entry_fields(updated),
             }
         )
     if conversation_id:

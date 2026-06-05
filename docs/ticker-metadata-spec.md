@@ -13,9 +13,9 @@ tickers. Unknown uppercase tokens are ignored unless registered.
 
 The Python capture pass is intentionally conservative:
 
-- If the root/source post contains exactly one recognized ticker, set it as
+- If the root/feed post contains exactly one recognized ticker, set it as
   `primary_ticker` and use it for the primary label.
-- If the root/source post contains multiple recognized tickers, store them as
+- If the root/feed post contains multiple recognized tickers, store them as
   `mentioned_only_tickers`.
 - If no ticker is recognized, do not invent a primary ticker.
 

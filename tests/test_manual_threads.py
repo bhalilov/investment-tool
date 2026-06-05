@@ -37,12 +37,12 @@ class ManualThreadsTests(unittest.TestCase):
             record = manual_threads.build_bundle_record(
                 bundle_id="sample",
                 bundle_name="Sample",
-                sources=[first, second],
+                input_paths=[first, second],
                 output_dir=root / "out",
                 dry_run=True,
             )
 
-        self.assertEqual(record["source_type"], "manual_x_screenshot_bundle")
+        self.assertEqual(record["feed_type"], "manual_x_screenshot_bundle")
         self.assertEqual([item["index"] for item in record["screenshots"]], [1, 2])
         self.assertIsNone(record["screenshots"][0]["duplicate_of_index"])
         self.assertEqual(record["screenshots"][1]["duplicate_of_index"], 1)
@@ -51,18 +51,18 @@ class ManualThreadsTests(unittest.TestCase):
     def test_write_bundle_copies_images_and_writes_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / "screen.png"
-            source.write_bytes(tiny_png())
+            screenshot = root / "screen.png"
+            screenshot.write_bytes(tiny_png())
             out = root / "manual"
             record = manual_threads.build_bundle_record(
                 bundle_id="sample",
                 bundle_name="Sample",
-                sources=[source],
+                input_paths=[screenshot],
                 output_dir=out,
                 dry_run=False,
             )
 
-            bundle_path = manual_threads.write_bundle(record, [source], out, force=False)
+            bundle_path = manual_threads.write_bundle(record, [screenshot], out, force=False)
             written = json.loads(bundle_path.read_text(encoding="utf-8"))
             imported_path = resolve_portable_path(written["screenshots"][0]["imported_path"], root)
             bundle_exists = bundle_path.exists()

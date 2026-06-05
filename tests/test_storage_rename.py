@@ -10,7 +10,7 @@ from investment_tool.cli import main as cli_main
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 
 
-class StorageMigrationTests(unittest.TestCase):
+class StorageRenameTests(unittest.TestCase):
     def call_cli(self, args):
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -22,7 +22,7 @@ class StorageMigrationTests(unittest.TestCase):
         root = Path("/tmp/runtime-data")
         paths = storage_paths(root)
 
-        self.assertEqual(paths.x_records, root / "sources" / "x" / "records")
+        self.assertEqual(paths.x_records, root / "feeds" / "x" / "records")
         self.assertEqual(paths.prices_daily, root / "context" / "prices" / "daily")
         self.assertEqual(paths.indexes, root / "presentation" / "indexes")
         self.assertEqual(paths.legacy_x_evidence, root / "retrieval" / "legacy" / "x" / "evidence")
@@ -48,14 +48,14 @@ class StorageMigrationTests(unittest.TestCase):
     def test_portable_path_round_trips_data_token(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            path = root / "sources" / "x" / "media" / "3_abc.jpg"
+            path = root / "feeds" / "x" / "media" / "3_abc.jpg"
 
             token = portable_path(path, root)
 
-            self.assertEqual(token, "<data>/sources/x/media/3_abc.jpg")
+            self.assertEqual(token, "<data>/feeds/x/media/3_abc.jpg")
             self.assertEqual(resolve_portable_path(token, root), path)
 
-    def test_storage_migrate_moves_and_verifies(self):
+    def test_storage_rename_moves_and_verifies(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_records = root / "x_threads" / "thread_json"
@@ -71,50 +71,50 @@ class StorageMigrationTests(unittest.TestCase):
             old_prices.mkdir()
             (old_prices / "manifest.json").write_text('{"prices": true}\n', encoding="utf-8")
 
-            code, stdout, stderr = self.call_cli(["storage", "migrate", "--apply", "--data-dir", str(root)])
+            code, stdout, stderr = self.call_cli(["storage", "rename", "--apply", "--data-dir", str(root)])
 
             self.assertEqual((code, stderr), (0, ""))
             self.assertIn("FAILED=0", stdout)
-            written = json.loads((root / "sources" / "x" / "records" / "thread.json").read_text(encoding="utf-8"))
-            self.assertEqual(written["media_paths"]["3_abc"], "<data>/sources/x/media/3_abc.jpg")
+            written = json.loads((root / "feeds" / "x" / "records" / "thread.json").read_text(encoding="utf-8"))
+            self.assertEqual(written["media_paths"]["3_abc"], "<data>/feeds/x/media/3_abc.jpg")
             self.assertTrue((root / "context" / "prices" / "manifest.json").exists())
             self.assertFalse((root / "x_threads").exists())
             self.assertFalse((root / "market_prices").exists())
             self.assertTrue((root / "README.md").exists())
-            self.assertTrue((root / "sources" / "x" / "README.md").exists())
+            self.assertTrue((root / "feeds" / "x" / "README.md").exists())
 
-            code, stdout, stderr = self.call_cli(["storage", "migrate", "--verify-only", "--data-dir", str(root)])
+            code, stdout, stderr = self.call_cli(["storage", "rename", "--verify-only", "--data-dir", str(root)])
 
             self.assertEqual((code, stderr), (0, ""))
             self.assertIn("FAILED=0", stdout)
-            self.assertIn("ALREADY_MIGRATED=", stdout)
-            manifest = json.loads((root / "workflow" / "migrations" / "storage_migration_manifest.json").read_text())
+            self.assertIn("ALREADY_RENAMED=", stdout)
+            manifest = json.loads((root / "workflow" / "logs" / "storage_rename_manifest.json").read_text())
             self.assertEqual(manifest["summary"]["failed"], 0)
             self.assertEqual(manifest["summary"]["readme_missing_or_stale"], 0)
 
-    def test_storage_migrate_dry_run_does_not_create_target_tree(self):
+    def test_storage_rename_dry_run_does_not_create_target_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old_records = root / "x_threads" / "thread_json"
             old_records.mkdir(parents=True)
             (old_records / "thread.json").write_text('{"ok": true}\n', encoding="utf-8")
 
-            code, stdout, stderr = self.call_cli(["storage", "migrate", "--dry-run", "--data-dir", str(root)])
+            code, stdout, stderr = self.call_cli(["storage", "rename", "--dry-run", "--data-dir", str(root)])
 
             self.assertEqual((code, stderr), (0, ""))
-            self.assertIn("STORAGE_MIGRATION_MODE=dry_run", stdout)
-            self.assertFalse((root / "sources").exists())
+            self.assertIn("STORAGE_RENAME_MODE=dry_run", stdout)
+            self.assertFalse((root / "feeds").exists())
 
     def test_storage_clean_old_deletes_only_legacy_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            active = root / "sources" / "x" / "records"
+            active = root / "feeds" / "x" / "records"
             active.mkdir(parents=True)
             (active / "thread.json").write_text('{"active": true}\n', encoding="utf-8")
             old_targets = [
                 root / "legacy" / "unsorted" / "old.txt",
-                root / "sources" / "x" / "rebuild" / "old.json",
-                root / "sources" / "x" / "backups" / "backup.json",
+                root / "feeds" / "x" / "rebuild" / "old.json",
+                root / "feeds" / "x" / "backups" / "backup.json",
                 root / "retrieval" / "legacy" / "x" / "evidence" / "old.md",
             ]
             for path in old_targets:
@@ -127,8 +127,8 @@ class StorageMigrationTests(unittest.TestCase):
             self.assertIn("DELETED=4", stdout)
             self.assertTrue((active / "thread.json").exists())
             self.assertFalse((root / "legacy").exists())
-            self.assertFalse((root / "sources" / "x" / "rebuild").exists())
-            self.assertFalse((root / "sources" / "x" / "backups").exists())
+            self.assertFalse((root / "feeds" / "x" / "rebuild").exists())
+            self.assertFalse((root / "feeds" / "x" / "backups").exists())
             self.assertFalse((root / "retrieval" / "legacy").exists())
 
 

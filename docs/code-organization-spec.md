@@ -4,12 +4,12 @@ This is the locked package and naming plan for the refactor.
 
 ## Naming Rules
 
-- Folder context carries the source name.
+- Folder context carries the feed name.
 - Do not repeat prefixes inside a contextual folder.
 - Use short nouns for helpers and clear verbs for jobs.
-- Keep source-specific code under `sources`.
+- Keep feed-specific code under `feeds`.
 - Keep reusable records, rules, runtime helpers, analysis, retrieval, and
-  presentation outside source folders.
+  presentation outside feed folders.
 
 ## Package Hierarchy
 
@@ -18,15 +18,15 @@ This is the locked package and naming plan for the refactor.
 | `cli/` | Command entrypoints only |
 | `workflow/` | Workflow runner, stages, logs, locks, checks |
 | `runtime/` | Env, config, paths, reporting |
-| `sources/x/` | X API capture, raw archive, rebuild, X thread assembly |
-| `sources/articles/` | Saved article/archive ingest |
-| `sources/screenshots/` | Screenshot inbox, bundles, reconstruction |
+| `feeds/x/` | X API capture, raw archive, rebuild, X thread assembly |
+| `feeds/articles/` | Saved article/archive ingest |
+| `feeds/screenshots/` | Screenshot inbox, bundles, reconstruction |
 | `records/` | Canonical internal record shapes |
 | `context/` | Supporting context such as prices and image descriptions |
 | `analysis/` | Expensive AI passes and evidence generation |
 | `retrieval/` | Vector/search memory and quarantined legacy sync |
 | `presentation/` | HTML thread pages and indexes |
-| `rules/` | Ticker parsing and source-neutral filtering |
+| `rules/` | Ticker parsing and feed-neutral filtering |
 
 ## Locked Module Names
 
@@ -34,22 +34,22 @@ This is the locked package and naming plan for the refactor.
 | --- | --- |
 | `pipeline_orchestrator.py` | `workflow/run.py` plus `cli/main.py` |
 | `capture_threads.py` | `cli/legacy_x_capture.py` |
-| `x_client.py` | `sources/x/api.py` |
-| `x_capture_job.py` | `sources/x/capture.py` |
-| `x_raw_archive.py` | `sources/x/raw.py` |
-| `x_raw_rebuild.py` | `sources/x/rebuild.py` |
-| `x_thread_model.py` | `sources/x/threads.py` and `sources/x/media.py` |
-| `x_capture_metadata.py` | `sources/x/metadata.py` |
-| `x_thread_store.py` | `sources/x/store.py` |
-| `hardcore_capture.py` | `sources/articles/ingest.py` |
-| `manual_threads.py` | `sources/screenshots/bundles.py` and `sources/screenshots/reconstruct.py` |
+| `x_client.py` | `feeds/x/api.py` |
+| `x_capture_job.py` | `feeds/x/capture.py` |
+| `x_raw_archive.py` | `feeds/x/raw.py` |
+| `x_raw_rebuild.py` | `feeds/x/rebuild.py` |
+| `x_thread_model.py` | `feeds/x/threads.py` and `feeds/x/media.py` |
+| `x_capture_metadata.py` | `feeds/x/metadata.py` |
+| `x_thread_store.py` | `feeds/x/store.py` |
+| `hardcore_capture.py` | `feeds/articles/ingest.py` |
+| `manual_threads.py` | `feeds/screenshots/bundles.py` and `feeds/screenshots/reconstruct.py` |
 | `market_prices.py` | `context/prices.py` |
 | `media_analysis.py` | `context/descriptions.py` |
 | `index_render.py` | `presentation/indexes.py` |
 | `x_thread_render.py` | `presentation/threads.py` |
 | `vector_store_sync.py` | `retrieval/legacy.py` |
 | `openai_api.py` | `analysis/openai.py` |
-| `source_config.py` | `runtime/config.py` |
+| `feed_config.py` | `runtime/config.py` |
 | `runtime.py` | `runtime/env.py` |
 | `reporting.py` | `runtime/reporting.py` |
 | `ticker_parser.py` | `rules/tickers.py` |
@@ -75,7 +75,7 @@ module paths and old commands during the transition.
 
 ## Adapter Note
 
-`sources/x/jobs.py` is the intentional adapter between the coordinate-only
+`feeds/x/jobs.py` is the intentional adapter between the coordinate-only
 workflow runner and the X-specific stage commands. It owns legacy X CLI modes
 such as rerender, raw rebuild, media-path repair, and missing-media recovery so
 `workflow/run.py` does not contain X implementation details.

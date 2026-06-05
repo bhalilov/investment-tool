@@ -1,10 +1,10 @@
-# Screenshot Source Spec
+# Screenshot Feed Spec
 
 This spec records current manual screenshot behavior.
 
 ## Purpose
 
-Manual screenshots are source records for X threads that may not be available
+Manual screenshots are feed records for X threads that may not be available
 through the X API. A screenshot set may contain multiple threads, overlapping
 scroll positions, and screenshots embedded inside visible posts.
 
@@ -14,8 +14,8 @@ Current import behavior:
 
 - accepts explicit screenshot file paths;
 - supports jpg, jpeg, png, and webp;
-- copies screenshots into runtime `sources/screenshots/media/<bundle_id>`;
-- writes one bundle JSON under runtime `sources/screenshots/bundles`;
+- copies screenshots into runtime `feeds/screenshots/media/<bundle_id>`;
+- writes one bundle JSON under runtime `feeds/screenshots/bundles`;
 - records dimensions, hash, original filename, imported path, and duplicate
   relationships.
 

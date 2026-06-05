@@ -1,3 +1,3 @@
-"""Compatibility wrapper for investment_tool.sources.x.store."""
+"""Compatibility wrapper for investment_tool.feeds.x.store."""
 
-from investment_tool.sources.x.store import *  # noqa: F401,F403
+from investment_tool.feeds.x.store import *  # noqa: F401,F403

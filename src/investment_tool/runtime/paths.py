@@ -50,7 +50,7 @@ def runtime_data_root(value: str | Path | None = None) -> Path:
 def data_root_for_x_root(value: str | Path) -> Path:
     text = str(value)
     path = resolve_portable_path(text) if text.startswith((DATA_TOKEN, REPO_TOKEN)) else resolve_path(value)
-    if path.name == "x" and path.parent.name == "sources":
+    if path.name == "x" and path.parent.name == "feeds":
         return path.parent.parent
     if path.name == "x_threads":
         return path.parent
@@ -62,12 +62,12 @@ class StoragePaths:
     root: Path
 
     @property
-    def sources(self) -> Path:
-        return self.root / "sources"
+    def feeds(self) -> Path:
+        return self.root / "feeds"
 
     @property
     def x_root(self) -> Path:
-        return self.sources / "x"
+        return self.feeds / "x"
 
     @property
     def x_raw(self) -> Path:
@@ -102,7 +102,7 @@ class StoragePaths:
 
     @property
     def articles_root(self) -> Path:
-        return self.sources / "articles"
+        return self.feeds / "articles"
 
     @property
     def articles_archive(self) -> Path:
@@ -118,7 +118,7 @@ class StoragePaths:
 
     @property
     def screenshots_root(self) -> Path:
-        return self.sources / "screenshots"
+        return self.feeds / "screenshots"
 
     @property
     def screenshots_inbox(self) -> Path:
@@ -225,12 +225,8 @@ class StoragePaths:
         return self.workflow_root / "locks"
 
     @property
-    def workflow_migrations(self) -> Path:
-        return self.workflow_root / "migrations"
-
-    @property
-    def storage_migration_manifest(self) -> Path:
-        return self.workflow_migrations / "storage_migration_manifest.json"
+    def storage_rename_manifest(self) -> Path:
+        return self.workflow_logs / "storage_rename_manifest.json"
 
     @property
     def legacy_root(self) -> Path:
@@ -268,7 +264,6 @@ class StoragePaths:
             self.indexes,
             self.workflow_logs,
             self.workflow_locks,
-            self.workflow_migrations,
         ]
         if include_planned:
             folders.extend([self.prices_hourly, self.prices_intraday])

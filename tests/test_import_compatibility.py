@@ -4,6 +4,7 @@ import unittest
 class ImportCompatibilityTests(unittest.TestCase):
     def test_old_module_paths_still_import_during_transition(self):
         from investment_tool import capture_threads
+        from investment_tool import feed_config
         from investment_tool import hardcore_capture
         from investment_tool import manual_threads
         from investment_tool import market_prices
@@ -12,6 +13,7 @@ class ImportCompatibilityTests(unittest.TestCase):
         from investment_tool import vector_store_sync
 
         self.assertTrue(callable(capture_threads.main))
+        self.assertTrue(callable(feed_config.load_x_feed_profile))
         self.assertTrue(callable(hardcore_capture.main))
         self.assertTrue(callable(manual_threads.main))
         self.assertTrue(callable(market_prices.main))
@@ -26,9 +28,9 @@ class ImportCompatibilityTests(unittest.TestCase):
         from investment_tool.retrieval import legacy
         from investment_tool.rules import filters, tickers
         from investment_tool.runtime import paths
-        from investment_tool.sources.articles import ingest
-        from investment_tool.sources.screenshots import bundles, reconstruct
-        from investment_tool.sources.x import api, capture, media, rebuild, store
+        from investment_tool.feeds.articles import ingest
+        from investment_tool.feeds.screenshots import bundles, reconstruct
+        from investment_tool.feeds.x import api, capture, media, rebuild, store
         from investment_tool.workflow import storage
 
         self.assertTrue(hasattr(openai, "call_responses_json"))

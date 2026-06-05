@@ -20,17 +20,17 @@ from investment_tool.analysis.openai import call_responses_json
 from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
-from investment_tool.runtime.config import SourceProfile, load_x_source_profile, source_identity, source_label
+from investment_tool.runtime.config import FeedProfile, load_x_feed_profile, feed_identity, feed_label
 
 
 DEFAULT_OPENAI_MODEL = "gpt-5.5"
 SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-SOURCE_PROFILE: SourceProfile = load_x_source_profile()
+FEED_PROFILE: FeedProfile = load_x_feed_profile()
 
 
-def configure_source(profile: SourceProfile) -> None:
-    global SOURCE_PROFILE
-    SOURCE_PROFILE = profile
+def configure_feed(profile: FeedProfile) -> None:
+    global FEED_PROFILE
+    FEED_PROFILE = profile
 
 
 def iso_now() -> str:
@@ -65,8 +65,8 @@ def imported_media_dir(output_dir: Path, bundle_id: str) -> Path:
     return output_dir / "media" / bundle_id
 
 
-def normalize_sources(paths: list[str], source_flags: list[str]) -> list[Path]:
-    combined = [*source_flags, *paths]
+def normalize_input_paths(paths: list[str], input_flags: list[str]) -> list[Path]:
+    combined = [*input_flags, *paths]
     normalized = [Path(raw).expanduser() for raw in combined if raw.strip()]
     if not normalized:
         raise ValueError("No screenshot paths were provided.")
@@ -136,19 +136,19 @@ def destination_name(index: int, path: Path, digest: str) -> str:
     return f"{index:03d}_{digest[:12]}{suffix}"
 
 
-def screenshot_record(index: int, source_path: Path, dest_path: Path, digest: str) -> dict[str, Any]:
-    width, height = image_size(source_path)
+def screenshot_record(index: int, input_path: Path, dest_path: Path, digest: str) -> dict[str, Any]:
+    width, height = image_size(input_path)
     return {
         "index": index,
-        "source_path": source_path.name,
+        "original_path": input_path.name,
         "imported_path": portable_path(dest_path),
-        "original_filename": source_path.name,
-        "mime_type": mimetypes.guess_type(source_path.name)[0] or "application/octet-stream",
-        "file_size": source_path.stat().st_size,
+        "original_filename": input_path.name,
+        "mime_type": mimetypes.guess_type(input_path.name)[0] or "application/octet-stream",
+        "file_size": input_path.stat().st_size,
         "file_sha256": digest,
         "width": width,
         "height": height,
-        "embedded_datetime": embedded_datetime(source_path),
+        "embedded_datetime": embedded_datetime(input_path),
     }
 
 
@@ -156,17 +156,17 @@ def build_bundle_record(
     *,
     bundle_id: str,
     bundle_name: str,
-    sources: list[Path],
+    input_paths: list[Path],
     output_dir: Path,
     dry_run: bool,
 ) -> dict[str, Any]:
     media_dir = imported_media_dir(output_dir, bundle_id)
     screenshots = []
     seen_hashes: dict[str, int] = {}
-    for index, source in enumerate(sources, start=1):
-        digest = file_sha256(source)
-        dest = media_dir / destination_name(index, source, digest)
-        record = screenshot_record(index, source, dest, digest)
+    for index, input_path in enumerate(input_paths, start=1):
+        digest = file_sha256(input_path)
+        dest = media_dir / destination_name(index, input_path, digest)
+        record = screenshot_record(index, input_path, dest, digest)
         if digest in seen_hashes:
             record["duplicate_of_index"] = seen_hashes[digest]
         else:
@@ -176,8 +176,8 @@ def build_bundle_record(
     return {
         "bundle_id": bundle_id,
         "bundle_name": bundle_name,
-        "source_type": "manual_x_screenshot_bundle",
-        "source": source_identity(SOURCE_PROFILE),
+        "feed_type": "manual_x_screenshot_bundle",
+        "feed": feed_identity(FEED_PROFILE),
         "created_at": iso_now(),
         "analysis_stage": "imported_pending_reconstruction",
         "status": "dry_run" if dry_run else "imported",
@@ -186,23 +186,23 @@ def build_bundle_record(
         "reconstructed_threads": [],
         "reconstruction": None,
         "notes": [
-            "Manual screenshots are source records. AI reconstruction should group overlapping scroll captures before extracting threads.",
+            "Manual screenshots are feed records. AI reconstruction should group overlapping scroll captures before extracting threads.",
             "Screenshots embedded inside visible X posts should be recorded as embedded_media on the reconstructed post.",
         ],
     }
 
 
-def write_bundle(record: dict[str, Any], sources: list[Path], output_dir: Path, force: bool) -> Path:
+def write_bundle(record: dict[str, Any], input_paths: list[Path], output_dir: Path, force: bool) -> Path:
     path = bundle_path(output_dir, record["bundle_id"])
     media_dir = imported_media_dir(output_dir, record["bundle_id"])
     if path.exists() and not force:
         raise FileExistsError(f"Manual screenshot bundle already exists: {path}")
     media_dir.mkdir(parents=True, exist_ok=True)
     path.parent.mkdir(parents=True, exist_ok=True)
-    if len(sources) != len(record["screenshots"]):
-        raise ValueError("Source count does not match screenshot record count.")
-    for source, screenshot in zip(sources, record["screenshots"]):
-        shutil.copy2(source, resolve_portable_path(screenshot["imported_path"]))
+    if len(input_paths) != len(record["screenshots"]):
+        raise ValueError("Input count does not match screenshot record count.")
+    for input_path, screenshot in zip(input_paths, record["screenshots"]):
+        shutil.copy2(input_path, resolve_portable_path(screenshot["imported_path"]))
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 
@@ -215,7 +215,7 @@ def reconstruction_schema() -> dict[str, Any]:
             "post_local_id": {"type": "string", "maxLength": 80},
             "author_name": {"type": "string", "maxLength": 120},
             "username": {"type": "string", "maxLength": 80},
-            "is_source_account": {"type": "boolean"},
+            "is_feed_account": {"type": "boolean"},
             "visible_time": {"type": "string", "maxLength": 80},
             "text": {"type": "string", "maxLength": 4000},
             "relation": {
@@ -273,7 +273,7 @@ def reconstruction_schema() -> dict[str, Any]:
             "post_local_id",
             "author_name",
             "username",
-            "is_source_account",
+            "is_feed_account",
             "visible_time",
             "text",
             "relation",
@@ -319,26 +319,26 @@ def reconstruction_schema() -> dict[str, Any]:
                     "additionalProperties": False,
                     "properties": {
                         "manual_thread_id": {"type": "string", "maxLength": 100},
-                        "source_group_id": {"type": "string", "maxLength": 80},
+                        "feed_group_id": {"type": "string", "maxLength": 80},
                         "thread_title": {"type": "string", "maxLength": 200},
                         "root_author_name": {"type": "string", "maxLength": 120},
                         "root_username": {"type": "string", "maxLength": 80},
                         "observed_post_time": {"type": "string", "maxLength": 80},
                         "root_text": {"type": "string", "maxLength": 5000},
-                        "source_screenshot_indexes": {"type": "array", "maxItems": 20, "items": {"type": "integer"}},
+                        "feed_screenshot_indexes": {"type": "array", "maxItems": 20, "items": {"type": "integer"}},
                         "posts": {"type": "array", "maxItems": 120, "items": post_schema},
                         "merge_notes": {"type": "string", "maxLength": 1200},
                         "uncertainties": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 240}},
                     },
                     "required": [
                         "manual_thread_id",
-                        "source_group_id",
+                        "feed_group_id",
                         "thread_title",
                         "root_author_name",
                         "root_username",
                         "observed_post_time",
                         "root_text",
-                        "source_screenshot_indexes",
+                        "feed_screenshot_indexes",
                         "posts",
                         "merge_notes",
                         "uncertainties",
@@ -365,13 +365,13 @@ def build_reconstruction_prompt(record: dict[str, Any]) -> str:
                 ]
             )
         )
-    handles = [SOURCE_PROFILE.username, *SOURCE_PROFILE.alternate_usernames]
+    handles = [FEED_PROFILE.username, *FEED_PROFILE.alternate_usernames]
     visible_handles = ", ".join(f"@{item}" for item in handles if item)
-    source_account_line = f"The configured source account is {source_label(SOURCE_PROFILE)}"
+    feed_account_line = f"The configured feed account is {feed_label(FEED_PROFILE)}"
     if visible_handles:
-        source_account_line += f"; visible handles may include {visible_handles}."
+        feed_account_line += f"; visible handles may include {visible_handles}."
     else:
-        source_account_line += "."
+        feed_account_line += "."
     return "\n".join(
         [
             "Reconstruct X/Twitter threads from a set of manual screenshots.",
@@ -379,10 +379,10 @@ def build_reconstruction_prompt(record: dict[str, Any]) -> str:
             "A screenshot set may contain more than one thread. Create separate reconstructed_threads when roots or reply contexts differ.",
             "Merge duplicate/overlapping posts, but keep screenshot indexes as evidence.",
             "Preserve only visible text. Do not invent missing cut-off text. Mark starts_cut_off or ends_cut_off when the screenshot cuts a post.",
-            "The screenshots themselves are source records. Images embedded inside visible X posts are embedded media; describe their visible content on that post.",
+            "The screenshots themselves are feed records. Images embedded inside visible X posts are embedded media; describe their visible content on that post.",
             "Treat charts, article cards, dashboard screenshots, and photos inside X posts as embedded_media with concise OCR/description.",
-            "Do not infer investment signal, priority, portfolio action, or correctness. This pass only reconstructs source evidence.",
-            f"{source_account_line} Mark source-account fields true only for those visible usernames/names.",
+            "Do not infer investment signal, priority, portfolio action, or correctness. This pass only reconstructs feed evidence.",
+            f"{feed_account_line} Mark feed-account fields true only for those visible usernames/names.",
             "",
             f"Bundle id: {record['bundle_id']}",
             "Screenshots:",
@@ -423,14 +423,14 @@ def analyze_bundle_with_openai(record: dict[str, Any], model: str) -> dict[str, 
 
 def import_manual_thread_bundle(args: argparse.Namespace) -> int:
     load_env(Path(args.env).expanduser())
-    configure_source(load_x_source_profile(args.source_config, args.source_id))
-    sources = normalize_sources(args.paths, args.source)
+    configure_feed(load_x_feed_profile(args.feed_config, args.feed_id))
+    input_paths = normalize_input_paths(args.paths, args.input)
     output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage_paths().screenshots_root
-    bundle_id = slugify(args.bundle_id) if args.bundle_id else bundle_id_for(sources, args.bundle_name)
+    bundle_id = slugify(args.bundle_id) if args.bundle_id else bundle_id_for(input_paths, args.bundle_name)
     model = args.model or os.environ.get("OPENAI_MANUAL_THREAD_MODEL") or DEFAULT_OPENAI_MODEL
     reporter = start_reporter(
         "manual_thread_import",
-        total=len(sources),
+        total=len(input_paths),
         every_items=5,
         every_seconds=30,
         mode="dry_run" if args.dry_run else "import",
@@ -442,20 +442,20 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
     record = build_bundle_record(
         bundle_id=bundle_id,
         bundle_name=args.bundle_name,
-        sources=sources,
+        input_paths=input_paths,
         output_dir=output_dir,
         dry_run=args.dry_run,
     )
     if args.dry_run:
         for screenshot in record["screenshots"]:
-            print(f"Would import {screenshot['source_path']} -> {screenshot['imported_path']}")
+            print(f"Would import {screenshot['original_path']} -> {screenshot['imported_path']}")
         if args.analyze:
             print("Would run manual thread reconstruction after import.")
         reporter.done(bundle_path=portable_path(bundle_path(output_dir, bundle_id)), screenshots=len(record["screenshots"]))
         return 0
 
-    path = write_bundle(record, sources, output_dir, force=args.force)
-    reporter.checkpoint(processed=len(sources), force=True, bundle_path=portable_path(path))
+    path = write_bundle(record, input_paths, output_dir, force=args.force)
+    reporter.checkpoint(processed=len(input_paths), force=True, bundle_path=portable_path(path))
     if args.analyze:
         reconstruction = analyze_bundle_with_openai(record, model)
         if not reconstruction:
@@ -491,11 +491,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Import manual X screenshot sets and optionally reconstruct threads from overlapping screenshots."
     )
     parser.add_argument("paths", nargs="*", help="Screenshot image paths.")
-    parser.add_argument("--source", action="append", default=[], help="Screenshot image path; may be repeated.")
+    parser.add_argument("--input", action="append", default=[], help="Screenshot image path; may be repeated.")
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--env", default=".env")
-    parser.add_argument("--source-config", default="config/sources/x_accounts.json")
-    parser.add_argument("--source-id", default="")
+    parser.add_argument("--feed-config", default="config/feeds/x_accounts.json")
+    parser.add_argument("--feed-id", default="")
     parser.add_argument("--bundle-id", default="")
     parser.add_argument("--bundle-name", default="")
     parser.add_argument("--model", default="")

@@ -4,34 +4,34 @@ This spec records current X reconstruction behavior.
 
 ## Inputs
 
-- Configured X source profile from `config/sources/x_accounts.json`.
+- Configured X feed profile from `config/feeds/x_accounts.json`.
 - Thread rules from `config/rules/thread_reconstruction.default.json`.
-- Raw X API responses stored under runtime `sources/x/raw`.
+- Raw X API responses stored under runtime `feeds/x/raw`.
 - Existing clean thread JSON used as cache when available.
 
 ## Thread Inclusion
 
 Current reconstruction includes:
 
-- root posts authored by the configured source account;
-- source-authored replies in conversations;
-- the parent question when the source reply answers another user;
-- quote posts referenced by source posts;
+- root posts authored by the configured feed account;
+- feed-authored replies in conversations;
+- the parent question when the feed reply answers another user;
+- quote posts referenced by feed posts;
 - explicit linked X posts found in tweet URLs;
 - parent chains up to configured depth.
 
 Current reconstruction excludes:
 
-- random user replies unless they are part of source reply context;
+- random user replies unless they are part of feed reply context;
 - off-topic retweets;
-- off-topic source reply contexts;
+- off-topic feed reply contexts;
 - self-promo retweets matching configured patterns.
 
 ## Conversation Fetching
 
 Live capture:
 
-- fetches the configured source timeline;
+- fetches the configured feed timeline;
 - walks referenced posts and parent chains;
 - searches conversations only when the cached thread is missing or changed;
 - uses configured `conversation_pages` unless overridden.
@@ -44,13 +44,13 @@ Raw rebuild:
 
 ## Classification
 
-Thread type is source-configurable:
+Thread type is feed-configurable:
 
-- source root post: `SOURCE_THREAD`
-- source reply context: `SOURCE_REPLY_CONTEXT`
+- feed root post: `FEED_THREAD`
+- feed reply context: `FEED_REPLY_CONTEXT`
 - linked context: `LINKED_CONTEXT`
 
-Thread relevance is determined from source-authored text, root text, linked
+Thread relevance is determined from feed-authored text, root text, linked
 research domains, media presence, explicit linked posts, and ticker/finance
 language.
 

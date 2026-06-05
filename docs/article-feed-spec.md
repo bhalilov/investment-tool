@@ -1,11 +1,11 @@
-# Article Source Spec
+# Article Feed Spec
 
 This spec records current saved article archive behavior before the package
 refactor.
 
 ## Naming
 
-Code should use `sources/articles`, not a source-specific code name. The current
+Code should use `feeds/articles`, not a feed-specific code name. The current
 configured archive may be AJ Investment Research Hardcore/Ghost, but that is
 configuration, not package identity.
 

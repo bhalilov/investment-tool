@@ -33,11 +33,11 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertIn("DRY_RUN=true", stdout)
         self.assertIn("STAGES=x-capture,screenshots,prices,descriptions,render", stdout)
 
-    def test_storage_help_lists_migrate(self):
+    def test_storage_help_lists_rename(self):
         code, stdout, _ = self.call_cli(["storage", "--help"])
 
         self.assertEqual(code, 0)
-        self.assertIn("migrate", stdout)
+        self.assertIn("rename", stdout)
         self.assertIn("clean-old", stdout)
 
     def test_workflow_rebuild_requires_stage_or_all(self):

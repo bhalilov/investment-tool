@@ -20,8 +20,8 @@ IGNORABLE_LEGACY_FILES = {".DS_Store"}
 @dataclass(frozen=True)
 class StorageMapping:
     name: str
-    source: Path
-    dest: Path
+    old_path: Path
+    new_path: Path
     kind: str = "dir"
     compare_content: bool = True
 
@@ -73,7 +73,6 @@ def planned_mappings(paths: StoragePaths) -> list[StorageMapping]:
         StorageMapping("legacy article evidence", legacy / "hardcore" / "evidence", paths.legacy_articles_evidence, compare_content=False),
         StorageMapping("workflow logs", legacy / "pipeline" / "logs", paths.workflow_logs),
         StorageMapping("workflow locks", legacy / "pipeline" / "locks", paths.workflow_locks),
-        StorageMapping("workflow migrations", legacy / "pipeline" / "migrations", paths.workflow_migrations, compare_content=False),
         StorageMapping("legacy probes", legacy / "probes", paths.legacy_probes),
         StorageMapping("legacy unsorted", legacy / "unsorted", paths.legacy_unsorted),
     ]
@@ -85,31 +84,31 @@ def planned_mappings(paths: StoragePaths) -> list[StorageMapping]:
     return mappings
 
 
-def move_file(source: Path, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists():
-        if dest.is_dir():
-            raise IsADirectoryError(f"Cannot replace directory with file: {dest}")
-        dest.unlink()
-    source.rename(dest)
+def move_file(old_path: Path, new_path: Path) -> None:
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    if new_path.exists():
+        if new_path.is_dir():
+            raise IsADirectoryError(f"Cannot replace directory with file: {new_path}")
+        new_path.unlink()
+    old_path.rename(new_path)
 
 
-def move_tree(source: Path, dest: Path) -> None:
-    dest.mkdir(parents=True, exist_ok=True)
-    for child in sorted(source.iterdir(), key=lambda item: item.name):
-        target = dest / child.name
+def move_tree(old_path: Path, new_path: Path) -> None:
+    new_path.mkdir(parents=True, exist_ok=True)
+    for child in sorted(old_path.iterdir(), key=lambda item: item.name):
+        target = new_path / child.name
         if child.is_dir():
             move_tree(child, target)
         else:
             move_file(child, target)
-    source.rmdir()
+    old_path.rmdir()
 
 
-def move_path(source: Path, dest: Path) -> None:
-    if source.is_dir():
-        move_tree(source, dest)
+def move_path(old_path: Path, new_path: Path) -> None:
+    if old_path.is_dir():
+        move_tree(old_path, new_path)
     else:
-        move_file(source, dest)
+        move_file(old_path, new_path)
 
 
 def relative_file_records(root: Path) -> list[dict[str, object]]:
@@ -120,50 +119,50 @@ def relative_file_records(root: Path) -> list[dict[str, object]]:
     return files
 
 
-def migrate_mapping(mapping: StorageMapping, apply: bool, verify_only: bool, data_root: Path) -> dict[str, object]:
-    source = mapping.source
-    dest = mapping.dest
-    source_before = tree_stats(source)
-    dest_before = tree_stats(dest)
+def rename_mapping(mapping: StorageMapping, apply: bool, verify_only: bool, data_root: Path) -> dict[str, object]:
+    old_path = mapping.old_path
+    new_path = mapping.new_path
+    old_before = tree_stats(old_path)
+    new_before = tree_stats(new_path)
     record: dict[str, object] = {
         "name": mapping.name,
         "kind": mapping.kind,
-        "source": portable_path(source, data_root),
-        "dest": portable_path(dest, data_root),
-        "source_exists": source.exists(),
-        "dest_exists": dest.exists(),
+        "old_path": portable_path(old_path, data_root),
+        "new_path": portable_path(new_path, data_root),
+        "old_exists": old_path.exists(),
+        "new_exists": new_path.exists(),
         "compare_content": mapping.compare_content,
         "status": "",
-        "source_stats_before": source_before,
-        "dest_stats_before": dest_before,
-        "dest_stats_after": {},
+        "old_stats_before": old_before,
+        "new_stats_before": new_before,
+        "new_stats_after": {},
         "files": [],
         "verified": True,
     }
-    if apply and source.exists():
-        move_path(source, dest)
+    if apply and old_path.exists():
+        move_path(old_path, new_path)
 
-    source_after_exists = source.exists()
-    dest_after_exists = dest.exists()
-    record["source_exists_after"] = source_after_exists
-    record["dest_exists_after"] = dest_after_exists
-    record["dest_stats_after"] = tree_stats(dest)
-    record["files"] = relative_file_records(dest) if dest_after_exists else []
+    old_after_exists = old_path.exists()
+    new_after_exists = new_path.exists()
+    record["old_exists_after"] = old_after_exists
+    record["new_exists_after"] = new_after_exists
+    record["new_stats_after"] = tree_stats(new_path)
+    record["files"] = relative_file_records(new_path) if new_after_exists else []
 
-    source_existed = bool(record["source_exists"])
-    if not source_after_exists and dest_after_exists:
-        record["status"] = "migrated" if apply and source_existed else "already_migrated"
+    old_existed = bool(record["old_exists"])
+    if not old_after_exists and new_after_exists:
+        record["status"] = "renamed" if apply and old_existed else "already_renamed"
         record["verified"] = True
         return record
-    if not source_after_exists and not dest_after_exists:
-        record["status"] = "source_missing"
-        record["verified"] = not source_existed
+    if not old_after_exists and not new_after_exists:
+        record["status"] = "old_missing"
+        record["verified"] = not old_existed
         return record
     if apply:
-        record["status"] = "move_incomplete"
+        record["status"] = "rename_incomplete"
         record["verified"] = False
         return record
-    record["status"] = "not_migrated" if verify_only else "planned_move"
+    record["status"] = "not_renamed" if verify_only else "planned_rename"
     record["verified"] = not verify_only
     return record
 
@@ -172,29 +171,29 @@ def folder_readmes(paths: StoragePaths) -> dict[Path, str]:
     return {
         paths.root: """# Investment Tool Runtime Data
 
-This folder contains local runtime data for the investment research pipeline. It is intentionally organized by source, context, presentation, retrieval, and workflow so a person or AI can inspect it without opening the code first.
+This folder contains local runtime data for the investment research pipeline. It is intentionally organized by feed, context, presentation, retrieval, and workflow so a person or AI can inspect it without opening the code first.
 
-Start with `sources` for original captured material, `context` for supporting data, `presentation` for readable HTML, and `workflow` for run logs.
+Start with `feeds` for original captured material, `context` for supporting data, `presentation` for readable HTML, and `workflow` for run logs.
 """,
-        paths.sources: """# Sources
+        paths.feeds: """# Feeds
 
-Source folders contain captured or imported material before expensive AI analysis. Each child folder belongs to one input source family.
+Feed folders contain captured or imported material before expensive AI analysis. Each child folder belongs to one input feed family.
 
 Use `x` for X API captures, `articles` for saved web article archives, and `screenshots` for manually provided screenshot threads.
 """,
-        paths.x_root: """# X Source
+        paths.x_root: """# X Feed
 
 This folder contains X data for configured accounts. `raw` keeps saved API responses, `records` keeps clean thread records, and `media` keeps downloaded still images.
 
-Generated records should describe the source account inside the file. Videos and animated GIFs are represented as skipped media placeholders rather than processed image evidence.
+Generated records should describe the feed account inside the file. Videos and animated GIFs are represented as skipped media placeholders rather than processed image evidence.
 """,
-        paths.articles_root: """# Articles Source
+        paths.articles_root: """# Articles Feed
 
 This folder contains saved article/archive input and normalized article records. Articles are supporting context for thread analysis and may be stale relative to later posts.
 
-The current source may still be AJ/Hardcore/Ghost content, but reusable code should treat this as a generic saved-article source.
+The current feed may still be AJ/Hardcore/Ghost content, but reusable code should treat this as a generic saved-article feed.
 """,
-        paths.screenshots_root: """# Screenshots Source
+        paths.screenshots_root: """# Screenshots Feed
 
 This folder contains manual screenshot inputs and reconstructed screenshot-thread bundles. Screenshots can represent threads that were not available through the X API.
 
@@ -204,7 +203,7 @@ Use `inbox` for new files, `bundles` for grouped screenshot-thread records, `med
 
 Context folders contain supporting data used to make analysis more accurate. This includes market prices and visual descriptions extracted from media.
 
-Context should stay dated and source-aware so later AI passes can tell whether evidence was known at the time of a thread.
+Context should stay dated and feed-aware so later AI passes can tell whether evidence was known at the time of a thread.
 """,
         paths.prices_root: """# Prices
 
@@ -216,25 +215,25 @@ Price data is considered factual context and should be dated precisely when used
 
 This folder contains AI-generated visual descriptions for images. These descriptions let later text-only steps understand what screenshots and charts showed.
 
-Descriptions should stay tied to the original media file and source folder; they are not standalone thread records.
+Descriptions should stay tied to the original media file and feed folder; they are not standalone thread records.
 """,
         paths.presentation_root: """# Presentation
 
-This folder contains local readable views generated from canonical records. It is safe to regenerate from source records.
+This folder contains local readable views generated from canonical records. It is safe to regenerate from feed records.
 
-HTML pages and indexes should not be treated as authoritative source data.
+HTML pages and indexes should not be treated as authoritative feed data.
 """,
         paths.x_threads_html.parent: """# Thread Pages
 
-This folder groups rendered thread pages by source. Current X pages live in `x`.
+This folder groups rendered thread pages by feed. Current X pages live in `x`.
 
-Rendered pages are for browsing and QA; source truth lives under `sources`.
+Rendered pages are for browsing and QA; feed truth lives under `feeds`.
 """,
         paths.x_threads_html: """# X Thread Pages
 
 This folder contains rendered HTML pages for X thread records. These files are regenerated by the render stage.
 
-If a page looks wrong, inspect the matching JSON record in `sources/x/records` before trusting the HTML.
+If a page looks wrong, inspect the matching JSON record in `feeds/x/records` before trusting the HTML.
 """,
         paths.indexes: """# Indexes
 
@@ -371,7 +370,7 @@ def clean_old_storage(args: argparse.Namespace) -> int:
         },
         "targets": target_records,
     }
-    manifest_path = paths.workflow_migrations / "storage_cleanup_manifest.json"
+    manifest_path = paths.workflow_logs / "storage_cleanup_manifest.json"
     if apply:
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -412,7 +411,6 @@ def path_replacements(paths: StoragePaths) -> list[tuple[str, str]]:
         (root / "hardcore", paths.articles_root),
         (root / "pipeline" / "logs", paths.workflow_logs),
         (root / "pipeline" / "locks", paths.workflow_locks),
-        (root / "pipeline" / "migrations", paths.workflow_migrations),
         (root / "unsorted" / "AJ Investment Research PDFs", paths.articles_archive),
         (root, Path(DATA_TOKEN)),
         (repo, Path(REPO_TOKEN)),
@@ -474,7 +472,7 @@ def canonicalize_text_file(path: Path, replacements: list[tuple[str, str]], appl
 def canonicalizable_files(paths: StoragePaths) -> tuple[list[Path], list[Path]]:
     json_files = [
         path
-        for folder in (paths.sources, paths.context_root, paths.retrieval_root, paths.workflow_root)
+        for folder in (paths.feeds, paths.context_root, paths.retrieval_root, paths.workflow_root)
         for path in iter_files(folder)
         if path.suffix.lower() == ".json"
     ]
@@ -524,7 +522,7 @@ def canonicalize_runtime_paths(paths: StoragePaths, apply: bool) -> dict[str, ob
     }
 
 
-def migrate_storage(args: argparse.Namespace) -> int:
+def rename_storage(args: argparse.Namespace) -> int:
     paths = storage_paths(args.data_dir)
     apply = bool(args.apply)
     verify_only = bool(args.verify_only)
@@ -532,11 +530,11 @@ def migrate_storage(args: argparse.Namespace) -> int:
         paths.ensure_runtime_dirs(include_planned=False)
     mode = "apply" if apply else ("verify_only" if verify_only else "dry_run")
     mappings = planned_mappings(paths)
-    results = [migrate_mapping(mapping, apply=apply, verify_only=verify_only, data_root=paths.root) for mapping in mappings]
+    results = [rename_mapping(mapping, apply=apply, verify_only=verify_only, data_root=paths.root) for mapping in mappings]
     canonicalization = canonicalize_runtime_paths(paths, apply=apply) if (apply or verify_only) else {}
     readmes = sync_folder_readmes(paths, apply=apply) if (apply or verify_only) else {}
     legacy_roots = remove_empty_legacy_roots(paths, apply=apply) if apply else remove_empty_legacy_roots(paths, apply=False)
-    failed = [item for item in results if (apply or verify_only) and item["source_exists"] and not item["verified"]]
+    failed = [item for item in results if (apply or verify_only) and item["old_exists"] and not item["verified"]]
     stale_refs = int(canonicalization.get("stale_path_reference_files") or 0)
     readme_failures = int(readmes.get("missing_or_stale") or 0)
     manifest = {
@@ -547,10 +545,10 @@ def migrate_storage(args: argparse.Namespace) -> int:
         "target_layout": "canonical_storage_v1",
         "summary": {
             "mappings": len(results),
-            "planned_moves": sum(1 for item in results if item["status"] == "planned_move"),
-            "migrated": sum(1 for item in results if item["status"] == "migrated"),
-            "already_migrated": sum(1 for item in results if item["status"] == "already_migrated"),
-            "source_missing": sum(1 for item in results if item["status"] == "source_missing"),
+            "planned_renames": sum(1 for item in results if item["status"] == "planned_rename"),
+            "renamed": sum(1 for item in results if item["status"] == "renamed"),
+            "already_renamed": sum(1 for item in results if item["status"] == "already_renamed"),
+            "old_missing": sum(1 for item in results if item["status"] == "old_missing"),
             "verified": sum(1 for item in results if item["verified"]),
             "failed": len(failed) + stale_refs + readme_failures,
             "stale_path_reference_files": stale_refs,
@@ -563,17 +561,17 @@ def migrate_storage(args: argparse.Namespace) -> int:
         "folder_readmes": readmes,
         "legacy_root_cleanup": legacy_roots,
     }
-    manifest_path = resolve_portable_path(args.manifest) if args.manifest else paths.storage_migration_manifest
+    manifest_path = resolve_portable_path(args.manifest) if args.manifest else paths.storage_rename_manifest
     if apply or verify_only:
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"STORAGE_MIGRATION_MODE={mode}")
+    print(f"STORAGE_RENAME_MODE={mode}")
     print(f"DATA_ROOT={portable_path(paths.root, paths.root)}")
     print(f"MAPPINGS={manifest['summary']['mappings']}")
-    print(f"PLANNED_MOVES={manifest['summary']['planned_moves']}")
-    print(f"MIGRATED={manifest['summary']['migrated']}")
-    print(f"ALREADY_MIGRATED={manifest['summary']['already_migrated']}")
-    print(f"SOURCE_MISSING={manifest['summary']['source_missing']}")
+    print(f"PLANNED_RENAMES={manifest['summary']['planned_renames']}")
+    print(f"RENAMED={manifest['summary']['renamed']}")
+    print(f"ALREADY_RENAMED={manifest['summary']['already_renamed']}")
+    print(f"OLD_MISSING={manifest['summary']['old_missing']}")
     print(f"VERIFIED={manifest['summary']['verified']}")
     print(f"FAILED={manifest['summary']['failed']}")
     print(f"STALE_PATH_REFERENCE_FILES={manifest['summary']['stale_path_reference_files']}")
@@ -583,24 +581,29 @@ def migrate_storage(args: argparse.Namespace) -> int:
     print(f"MANIFEST={portable_path(manifest_path, paths.root)}")
     if failed:
         for item in failed[:20]:
-            print(f"VERIFY_FAILED name={item['name']} source={item['source']} dest={item['dest']}", file=sys.stderr)
+            print(f"VERIFY_FAILED name={item['name']} old={item['old_path']} new={item['new_path']}", file=sys.stderr)
     return 1 if failed or stale_refs or readme_failures else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Runtime storage maintenance.")
     subparsers = parser.add_subparsers(dest="command")
-    migrate = subparsers.add_parser("migrate", help="Rename/move and verify runtime data into canonical storage folders.")
-    mode = migrate.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--dry-run", action="store_true", help="Show the migration plan without writing files.")
-    mode.add_argument("--apply", action="store_true", help="Move data into the canonical storage layout.")
-    mode.add_argument("--verify-only", action="store_true", help="Verify an already-moved canonical layout.")
-    migrate.add_argument("--data-dir", default="", help="Runtime data root. Defaults to INVESTMENT_TOOL_DATA_DIR, then INVESTMENT_TOOL_HOME/data, then repo-local data/.")
-    migrate.add_argument("--manifest", default="", help="Override migration manifest path.")
-    clean_old = subparsers.add_parser("clean-old", help="Delete obsolete migrated legacy folders after verification.")
+
+    def add_rename_parser(name: str, help_text: str | None) -> argparse.ArgumentParser:
+        command = subparsers.add_parser(name, help=help_text)
+        mode = command.add_mutually_exclusive_group(required=True)
+        mode.add_argument("--dry-run", action="store_true", help="Show the rename plan without writing files.")
+        mode.add_argument("--apply", action="store_true", help="Rename data into the canonical storage layout.")
+        mode.add_argument("--verify-only", action="store_true", help="Verify an already-renamed canonical layout.")
+        command.add_argument("--data-dir", default="", help="Runtime data root. Defaults to INVESTMENT_TOOL_DATA_DIR, then INVESTMENT_TOOL_HOME/data, then repo-local data/.")
+        command.add_argument("--manifest", default="", help="Override rename manifest path.")
+        return command
+
+    add_rename_parser("rename", "Rename/move and verify runtime data into canonical storage folders.")
+    clean_old = subparsers.add_parser("clean-old", help="Delete obsolete old folders after verification.")
     clean_mode = clean_old.add_mutually_exclusive_group(required=True)
     clean_mode.add_argument("--dry-run", action="store_true", help="Show old folders that would be deleted.")
-    clean_mode.add_argument("--apply", action="store_true", help="Delete old migrated folders and files.")
+    clean_mode.add_argument("--apply", action="store_true", help="Delete old folders and files.")
     clean_old.add_argument("--data-dir", default="", help="Runtime data root. Defaults to INVESTMENT_TOOL_DATA_DIR, then INVESTMENT_TOOL_HOME/data, then repo-local data/.")
     return parser
 
@@ -608,8 +611,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "migrate":
-        return migrate_storage(args)
+    if args.command == "rename":
+        return rename_storage(args)
     if args.command == "clean-old":
         return clean_old_storage(args)
     parser.print_help()

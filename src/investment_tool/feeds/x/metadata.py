@@ -17,8 +17,8 @@ from investment_tool.rules.tickers import (
     extract_tickers,
     normalize_ticker as normalize_thread_ticker,
 )
-from investment_tool.sources.x.context import XCaptureContext
-from investment_tool.sources.x.threads import display_text, explicit_x_links, media_keys
+from investment_tool.feeds.x.context import XCaptureContext
+from investment_tool.feeds.x.threads import display_text, explicit_x_links, media_keys
 
 
 SIGNAL_VALUES = {"BUY_SIGNAL", "SELL_SIGNAL", "TRIM_SIGNAL", "HOLD_SIGNAL", "AVOID_SIGNAL", "WATCH_SIGNAL", "NO_ACTION"}
@@ -78,7 +78,7 @@ def non_photo_media_placeholders(
     media: dict[str, dict],
     context: XCaptureContext,
 ) -> list[dict[str, Any]]:
-    from investment_tool.sources.x.threads import non_photo_media_placeholders as model_non_photo_media_placeholders
+    from investment_tool.feeds.x.threads import non_photo_media_placeholders as model_non_photo_media_placeholders
 
     return model_non_photo_media_placeholders(items, media, context.media_rules)
 
@@ -88,7 +88,7 @@ def media_placeholder_tags(
     media: dict[str, dict],
     context: XCaptureContext,
 ) -> list[str]:
-    from investment_tool.sources.x.threads import media_placeholder_tags as model_media_placeholder_tags
+    from investment_tool.feeds.x.threads import media_placeholder_tags as model_media_placeholder_tags
 
     return model_media_placeholder_tags(items, media, context.media_rules)
 
@@ -102,16 +102,16 @@ def root_primary_tickers(root: dict | None) -> list[str]:
     return tickers if len(tickers) == 1 else []
 
 
-def source_conversation_tickers(root: dict | None, items: list[dict], context: XCaptureContext) -> list[str]:
-    source_items = [item for item in items if item.get("author_id") == context.user_id]
-    ticker_text = " ".join([display_text(root or {})] + [display_text(item) for item in source_items])
+def feed_conversation_tickers(root: dict | None, items: list[dict], context: XCaptureContext) -> list[str]:
+    feed_items = [item for item in items if item.get("author_id") == context.user_id]
+    ticker_text = " ".join([display_text(root or {})] + [display_text(item) for item in feed_items])
     return extract_tickers(ticker_text)
 
 
 def thread_title(root: dict | None, items: list[dict]) -> tuple[str, str]:
-    source = root or (items[0] if items else {})
-    text = display_text(source)
-    tickers = root_primary_tickers(source)
+    item = root or (items[0] if items else {})
+    text = display_text(item)
+    tickers = root_primary_tickers(item)
     topic = topic_phrase(text)
     prefix = "/".join(tickers[:3]) if tickers else "X"
     title = f"{prefix} - {topic}"
@@ -314,19 +314,19 @@ def infer_tags(items: list[dict], thread_type: str, tickers: list[str], context:
     )
 
 
-def rough_tldr(items: list[dict], source_user_id: str) -> str:
+def rough_tldr(items: list[dict], feed_user_id: str) -> str:
     ordered = sorted(items, key=lambda x: x.get("created_at") or "")
-    source_items = [item for item in ordered if item.get("author_id") == source_user_id]
-    source = source_items[0] if source_items else (ordered[0] if ordered else {})
-    words = display_text(source).strip().replace("\n", " ").split()
+    feed_items = [item for item in ordered if item.get("author_id") == feed_user_id]
+    feed_post = feed_items[0] if feed_items else (ordered[0] if ordered else {})
+    words = display_text(feed_post).strip().replace("\n", " ").split()
     return " ".join(words[:55]) + ("..." if len(words) > 55 else "")
 
 
 def classify_thread(root: dict | None, items: list[dict], context: XCaptureContext) -> str:
     if root and root.get("author_id") == context.user_id:
-        return context.configured_thread_label("source_started_thread", "SOURCE_THREAD")
+        return context.configured_thread_label("feed_started_thread", "FEED_THREAD")
     if any(item.get("author_id") == context.user_id for item in items):
-        return context.configured_thread_label("source_reply_context", "SOURCE_REPLY_CONTEXT")
+        return context.configured_thread_label("feed_reply_context", "FEED_REPLY_CONTEXT")
     return context.configured_thread_label("linked_context", "LINKED_CONTEXT")
 
 

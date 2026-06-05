@@ -15,7 +15,7 @@ Thread pages show:
 - AI status when pending;
 - primary ticker, context tickers, mentioned-only tickers;
 - tags and type;
-- post counts and source-post counts;
+- post counts and feed-post counts;
 - local JSON and X root links;
 - evidence notes, ambiguities, and contradictions when available;
 - posts in chronological order;
@@ -29,7 +29,7 @@ Owned status must not be written as static thread evidence.
 Indexes are interactive Tabulator pages. They include:
 
 - all threads;
-- by source;
+- by feed;
 - by ticker;
 - by type;
 - by tag/category;
