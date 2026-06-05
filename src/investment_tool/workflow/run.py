@@ -24,8 +24,14 @@ from investment_tool.feeds.x.jobs import run_x_action
 # Keep stage order explicit and boring. Scheduled update and manual rebuild have
 # different intent, so they get separate ordered lists instead of one clever DAG.
 UPDATE_STAGE_ORDER = ("x-capture", "screenshots", "prices", "descriptions", "render")
-REBUILD_STAGE_ORDER = ("x-raw", "screenshots", "prices", "descriptions", "render", "articles")
-ALL_STAGE_NAMES = tuple(dict.fromkeys((*UPDATE_STAGE_ORDER, *REBUILD_STAGE_ORDER)))
+REBUILD_ALL_STAGE_ORDER = ("x-raw", "screenshots", "prices", "descriptions", "render", "articles")
+REBUILD_STAGE_CHOICES = (
+    *REBUILD_ALL_STAGE_ORDER,
+    "x-reindex",
+    "x-repair-media-paths",
+    "x-recover-media",
+)
+ALL_STAGE_NAMES = tuple(dict.fromkeys((*UPDATE_STAGE_ORDER, *REBUILD_STAGE_CHOICES)))
 SCREENSHOT_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 DEFAULT_LOCK_STALE_SECONDS = 6 * 60 * 60
 
@@ -144,9 +150,9 @@ def build_workflow_parser() -> argparse.ArgumentParser:
         update.add_argument("--skip", action="append", default=[], choices=UPDATE_STAGE_ORDER, help="Skip this stage; repeatable.")
 
     rebuild = subparsers.add_parser("rebuild", help="Run explicit historical or missing-data rebuild stages.")
-    add_workflow_run_args(rebuild, REBUILD_STAGE_ORDER)
+    add_workflow_run_args(rebuild, REBUILD_STAGE_CHOICES)
     rebuild.add_argument("--all", action="store_true", help="Run all rebuild stages.")
-    rebuild.add_argument("--skip", action="append", default=[], choices=REBUILD_STAGE_ORDER, help="Skip this stage; repeatable.")
+    rebuild.add_argument("--skip", action="append", default=[], choices=REBUILD_STAGE_CHOICES, help="Skip this stage; repeatable.")
     rebuild.add_argument("--rebuild-staging-dir", default="")
     rebuild.add_argument("--replace-generated-json", action="store_true")
 
@@ -162,7 +168,7 @@ def selected_stages(args: argparse.Namespace) -> list[str]:
         stages = list(args.stage or UPDATE_STAGE_ORDER)
     elif args.command == "rebuild":
         if args.all:
-            stages = list(REBUILD_STAGE_ORDER)
+            stages = list(REBUILD_ALL_STAGE_ORDER)
         else:
             stages = list(args.stage or [])
     else:
@@ -228,6 +234,12 @@ def run_stage(stage: str, args: argparse.Namespace) -> StageResult:
             code = run_x_action(workflow_x_namespace(args), "x-capture")
         elif stage == "x-raw":
             code = run_x_action(workflow_x_namespace(args), "x-raw-rebuild")
+        elif stage == "x-reindex":
+            code = run_x_action(workflow_x_namespace(args), "x-reindex")
+        elif stage == "x-repair-media-paths":
+            code = run_x_action(workflow_x_namespace(args), "x-repair-media-paths")
+        elif stage == "x-recover-media":
+            code = run_x_action(workflow_x_namespace(args), "x-recover-media")
         elif stage == "render":
             code = run_x_action(workflow_x_namespace(args), "x-rerender")
         elif stage == "prices":

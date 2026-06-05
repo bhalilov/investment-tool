@@ -46,6 +46,32 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("requires one or more --stage values or --all", stderr)
 
+    def test_workflow_rebuild_all_excludes_explicit_repairs(self):
+        code, stdout, _ = self.call_cli(["workflow", "rebuild", "--all", "--dry-run"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("STAGES=x-raw,screenshots,prices,descriptions,render,articles", stdout)
+        self.assertNotIn("x-repair-media-paths", stdout)
+        self.assertNotIn("x-recover-media", stdout)
+
+    def test_workflow_rebuild_accepts_explicit_x_maintenance_stages(self):
+        code, stdout, _ = self.call_cli(
+            [
+                "workflow",
+                "rebuild",
+                "--stage",
+                "x-reindex",
+                "--stage",
+                "x-repair-media-paths",
+                "--stage",
+                "x-recover-media",
+                "--dry-run",
+            ]
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn("STAGES=x-reindex,x-repair-media-paths,x-recover-media", stdout)
+
     def test_workflow_check_is_read_only_and_uses_runtime_root(self):
         old_data_root = os.environ.get("INVESTMENT_TOOL_DATA_DIR")
         with tempfile.TemporaryDirectory() as tmp:
