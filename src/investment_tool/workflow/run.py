@@ -13,7 +13,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, storage_paths
@@ -264,6 +264,8 @@ def run_stage(stage: str, args: argparse.Namespace) -> StageResult:
 
 
 def run_workflow_check(command: str) -> int:
+    from investment_tool.feeds.x.verify import verify_x_records
+
     paths = storage_paths()
     root = paths.root
     checks = {
@@ -300,9 +302,22 @@ def run_workflow_check(command: str) -> int:
         if exists:
             legacy_present += 1
         print(f"{name.upper()} path={portable_path(path)} exists={str(exists).lower()} items={count}")
+    x_verify = verify_x_records(paths.x_records)
+    print(
+        f"X_RECORD_VERIFY records={x_verify['records']} invalid_json={x_verify['invalid_json']} "
+        f"violations={x_verify['violation_count']} warnings={x_verify['warning_count']}"
+    )
+    for violation in x_verify["violations"][:20]:
+        print(f"X_RECORD_VIOLATION {json_like(violation)}")
+    for warning in x_verify["warnings"][:20]:
+        print(f"X_RECORD_WARNING {json_like(warning)}")
     print(f"MISSING_PATHS={missing}")
     print(f"LEGACY_PATHS_PRESENT={legacy_present}")
-    return 0
+    return 1 if x_verify["violation_count"] else 0
+
+
+def json_like(value: dict[str, Any]) -> str:
+    return " ".join(f"{key}={value[key]}" for key in sorted(value))
 
 
 def should_skip_stage_due_to_failure(stage: str, results: Sequence[StageResult]) -> str | None:
