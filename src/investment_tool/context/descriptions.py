@@ -15,14 +15,12 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from investment_tool.analysis.openai import call_responses_json
-from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
-from investment_tool.runtime.env import load_env
 from investment_tool.runtime.config import SourceProfile, load_prompt, load_x_source_profile, read_json, source_identity
+from investment_tool.runtime.env import load_env
+from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
+from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
 
 
-DEFAULT_DATA_DIR = Path("~/investment-tool-data").expanduser()
-DEFAULT_MEDIA_DIR = DEFAULT_DATA_DIR / "x_threads" / "media"
-DEFAULT_OUTPUT_DIR = DEFAULT_DATA_DIR / "x_threads" / "media_analysis"
 DEFAULT_OPENAI_MODEL = "gpt-5.5"
 DEFAULT_PROMPT_PATH = "prompts/media_description.md"
 DEFAULT_SCHEMA_PATH = "schemas/media_description.schema.json"
@@ -127,7 +125,7 @@ def build_record(path: Path, analysis: dict[str, Any] | None, model: str) -> dic
     stat = path.stat()
     return {
         "media_key": media_key(path),
-        "source_path": str(path),
+        "source_path": portable_path(path),
         "filename": path.name,
         "mime_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
         "file_size": stat.st_size,
@@ -145,11 +143,12 @@ def build_record(path: Path, analysis: dict[str, Any] | None, model: str) -> dic
 def sync_media_analysis(args: argparse.Namespace) -> int:
     load_env(Path(args.env).expanduser())
     configure_source(load_x_source_profile(args.source_config, args.source_id))
+    storage = storage_paths()
     model = args.model or os.environ.get("OPENAI_MEDIA_MODEL") or DEFAULT_OPENAI_MODEL
     prompt = load_prompt(args.prompt)
     schema = read_json(args.schema)
-    media_dir = Path(args.media_dir).expanduser()
-    output_dir = Path(args.output_dir).expanduser()
+    media_dir = resolve_portable_path(args.media_dir) if args.media_dir else storage.x_media
+    output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage.x_descriptions
     paths = iter_media_paths(media_dir)
     if args.media_key:
         wanted = {key.strip() for key in args.media_key if key.strip()}
@@ -157,13 +156,13 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
     if args.limit:
         paths = paths[: args.limit]
     reporter = start_reporter(
-        "media_analysis",
+        "descriptions",
         total=len(paths),
         every_items=10,
         every_seconds=30,
         mode="dry_run" if args.dry_run else "sync",
-        media_dir=media_dir,
-        output_dir=output_dir,
+        media_dir=portable_path(media_dir),
+        output_dir=portable_path(output_dir),
         model=model,
         prompt_path=prompt["path"],
         prompt_sha256=prompt["sha256"],
@@ -209,8 +208,8 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
     cost = estimate_openai_cost_usd(model, stats["input_tokens"], stats["output_tokens"])
     manifest = {
         "generated_at": iso_now(),
-        "media_dir": str(media_dir),
-        "output_dir": str(output_dir),
+        "media_dir": portable_path(media_dir),
+        "output_dir": portable_path(output_dir),
         "model": model,
         "prompt_path": prompt["path"],
         "prompt_sha256": prompt["sha256"],
@@ -228,8 +227,8 @@ def sync_media_analysis(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Analyze downloaded X media into reusable neutral visual descriptions.")
-    parser.add_argument("--media-dir", default=str(DEFAULT_MEDIA_DIR))
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--media-dir", default="")
+    parser.add_argument("--output-dir", default="")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--source-config", default="config/sources/x_accounts.json")
     parser.add_argument("--source-id", default="")

@@ -1,12 +1,11 @@
 # Source Record Spec
 
-This spec records the current stored-record behavior before the package
-refactor. Source records are local evidence files. They are not final AI
+This spec records the current stored-record behavior. Source records are local evidence files. They are not final AI
 analysis and should remain usable without vector storage.
 
 ## X Thread Records
 
-Clean X records live under runtime `x_threads/thread_json`.
+Clean X records live under runtime `sources/x/records`.
 
 Required identity and routing fields:
 
@@ -40,12 +39,12 @@ Rules:
 - X records may include `preview_text` before thread AI runs.
 - X records must not contain final AI fields unless `analysis` is present and
   `analysis_stage` is no longer pending.
-- Ignored X records move to runtime `x_threads/ignored` and include
+- Ignored X records move to runtime `sources/x/ignored` and include
   `ignored`, `ignored_reason`, and `ignored_at`.
 
 ## Article Records
 
-Saved article records live under runtime `hardcore/article_json` for the current
+Saved article records live under runtime `sources/articles/records` for the
 configured archive source.
 
 Current fields:
@@ -75,7 +74,7 @@ Rules:
 
 ## Screenshot Bundle Records
 
-Manual screenshot records live under runtime `manual_threads/bundles`.
+Manual screenshot records live under runtime `sources/screenshots/bundles`.
 
 Current fields:
 

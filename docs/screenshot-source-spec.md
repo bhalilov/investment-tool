@@ -1,7 +1,6 @@
 # Screenshot Source Spec
 
-This spec records current manual screenshot behavior before the package
-refactor.
+This spec records current manual screenshot behavior.
 
 ## Purpose
 
@@ -15,8 +14,8 @@ Current import behavior:
 
 - accepts explicit screenshot file paths;
 - supports jpg, jpeg, png, and webp;
-- copies screenshots into runtime `manual_threads/media/<bundle_id>`;
-- writes one bundle JSON under runtime `manual_threads/bundles`;
+- copies screenshots into runtime `sources/screenshots/media/<bundle_id>`;
+- writes one bundle JSON under runtime `sources/screenshots/bundles`;
 - records dimensions, hash, original filename, imported path, and duplicate
   relationships.
 

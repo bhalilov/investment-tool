@@ -26,13 +26,11 @@ from typing import Any, Sequence
 
 from investment_tool.analysis.openai import call_responses_json
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.reporting import start_reporter
 from investment_tool.runtime.config import read_json
+from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
+from investment_tool.runtime.reporting import start_reporter
 
 
-DEFAULT_DATA_DIR = Path("~/investment-tool-data").expanduser()
-DEFAULT_ARCHIVE_DIR = DEFAULT_DATA_DIR / "unsorted" / "research_article_archive"
-DEFAULT_OUTPUT_DIR = DEFAULT_DATA_DIR / "article_archive"
 DEFAULT_OPENAI_MODEL = "gpt-5.5"
 DEFAULT_SOURCE_CONFIG = "config/sources/web_archives.json"
 ARTICLE_SOURCE: dict[str, Any] = {}
@@ -78,7 +76,7 @@ def article_source_name() -> str:
 def article_source_storage_path(name: str, fallback: Path) -> Path:
     storage = ARTICLE_SOURCE.get("storage") or {}
     value = storage.get(name)
-    return Path(str(value)).expanduser() if value else fallback
+    return resolve_portable_path(str(value)) if value else fallback
 
 
 def article_source_record() -> dict[str, Any]:
@@ -421,10 +419,12 @@ def download_placeholder(_: argparse.Namespace) -> None:
 
 
 def process_articles(args: argparse.Namespace) -> int:
-    archive_dir = Path(args.archive_dir).expanduser()
-    output_dir = Path(args.output_dir).expanduser()
-    article_json_dir = output_dir / "article_json"
-    evidence_dir = output_dir / "evidence"
+    storage = storage_paths()
+    archive_dir = resolve_portable_path(args.archive_dir) if args.archive_dir else storage.articles_archive
+    output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage.articles_root
+    article_json_dir = resolve_portable_path(args.records_dir) if args.records_dir else storage.articles_records
+    evidence_dir = resolve_portable_path(args.evidence_dir) if args.evidence_dir else storage.legacy_articles_evidence
+    manifest_path = resolve_portable_path(args.manifest) if args.manifest else storage.articles_manifest
     index = load_article_index(archive_dir)
     if args.limit:
         index = index[: args.limit]
@@ -446,7 +446,7 @@ def process_articles(args: argparse.Namespace) -> int:
             except Exception:
                 pass
     reporter = start_reporter(
-        "hardcore_capture",
+        "articles",
         total=len(index),
         every_items=5,
         every_seconds=30,
@@ -454,8 +454,10 @@ def process_articles(args: argparse.Namespace) -> int:
         analyze=str(not args.no_analyze).lower(),
         force_ai=str(args.force_ai).lower(),
         model=model,
-        archive_dir=archive_dir,
-        output_dir=output_dir,
+        archive_dir=portable_path(archive_dir),
+        output_dir=portable_path(output_dir),
+        records_dir=portable_path(article_json_dir),
+        evidence_dir=portable_path(evidence_dir),
         found_articles=len(index),
         already_analyzed=existing_complete,
         pending_ai=max(0, len(index) - existing_complete) if not args.no_analyze else 0,
@@ -516,8 +518,8 @@ def process_articles(args: argparse.Namespace) -> int:
             "url": item.get("url"),
             "date": item.get("date"),
             "date_iso": parse_article_date(str(item.get("date") or "")),
-            "html_path": str(html_path),
-            "pdf_path": str(pdf_path) if pdf_path.exists() else "",
+            "html_path": portable_path(html_path),
+            "pdf_path": portable_path(pdf_path) if pdf_path.exists() else "",
             "text": text,
             "html_meta": html_meta,
             "analysis": analysis,
@@ -550,17 +552,20 @@ def process_articles(args: argparse.Namespace) -> int:
 
     manifest = {
         "generated_at": iso_now(),
-        "archive_dir": str(archive_dir),
-        "output_dir": str(output_dir),
+        "archive_dir": portable_path(archive_dir),
+        "output_dir": portable_path(output_dir),
+        "records_dir": portable_path(article_json_dir),
+        "evidence_dir": portable_path(evidence_dir),
         "model": model,
         **stats,
     }
     if not args.dry_run:
-        (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     reporter.done_stats(
         stats,
         token_model=model,
-        manifest=output_dir / "manifest.json",
+        manifest=portable_path(manifest_path),
     )
     return 0 if stats["missing_html"] == 0 else 1
 
@@ -571,6 +576,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--source-id", default="")
     parser.add_argument("--archive-dir", default="")
     parser.add_argument("--output-dir", default="")
+    parser.add_argument("--records-dir", default="")
+    parser.add_argument("--evidence-dir", default="")
+    parser.add_argument("--manifest", default="")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--model", default="")
     parser.add_argument("--limit", type=int, default=0)
@@ -582,10 +590,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     load_env(Path(args.env))
     configure_article_source(load_article_source(args.source_config, args.source_id))
+    storage = storage_paths()
     if not args.archive_dir:
-        args.archive_dir = str(article_source_storage_path("archive_dir", DEFAULT_ARCHIVE_DIR))
+        args.archive_dir = str(article_source_storage_path("archive_dir", storage.articles_archive))
+    if not args.records_dir:
+        args.records_dir = str(article_source_storage_path("records_dir", storage.articles_records))
+    if not args.evidence_dir:
+        args.evidence_dir = str(article_source_storage_path("evidence_dir", storage.legacy_articles_evidence))
+    if not args.manifest:
+        args.manifest = str(article_source_storage_path("manifest_path", storage.articles_manifest))
     if not args.output_dir:
-        args.output_dir = str(article_source_storage_path("output_dir", DEFAULT_OUTPUT_DIR))
+        args.output_dir = str(article_source_storage_path("output_dir", storage.articles_root))
     if args.download:
         download_placeholder(args)
     return process_articles(args)

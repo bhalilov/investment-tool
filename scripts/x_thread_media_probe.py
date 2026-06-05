@@ -22,6 +22,7 @@ if SRC_DIR.exists() and str(SRC_DIR) not in sys.path:
 
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.config import SourceProfile, load_x_source_profile
+from investment_tool.runtime.paths import resolve_portable_path, storage_paths
 
 
 API_BASE = "https://api.x.com/2"
@@ -432,6 +433,7 @@ def main() -> int:
     parser.add_argument("--timeline-pages", type=int, default=3)
     parser.add_argument("--conversation-pages", type=int, default=5)
     parser.add_argument("--conversation-id")
+    parser.add_argument("--output-dir", default="")
     args = parser.parse_args()
 
     repo_env = Path(__file__).resolve().parents[1] / ".env"
@@ -443,7 +445,8 @@ def main() -> int:
         return 1
 
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_dir = Path.home() / "investment-tool-data" / "probes" / f"x_thread_media_{stamp}"
+    probe_root = resolve_portable_path(args.output_dir) if args.output_dir else storage_paths().workflow_root / "probes"
+    base_dir = probe_root / f"x_thread_media_{stamp}"
     raw_dir = base_dir / "raw_api"
     media_dir = base_dir / "media"
     raw_dir.mkdir(parents=True, exist_ok=True)

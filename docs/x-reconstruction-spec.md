@@ -1,12 +1,12 @@
 # X Reconstruction Spec
 
-This spec records current X reconstruction behavior before the package refactor.
+This spec records current X reconstruction behavior.
 
 ## Inputs
 
 - Configured X source profile from `config/sources/x_accounts.json`.
 - Thread rules from `config/rules/thread_reconstruction.default.json`.
-- Raw X API responses stored under runtime `x_threads/raw_api`.
+- Raw X API responses stored under runtime `sources/x/raw`.
 - Existing clean thread JSON used as cache when available.
 
 ## Thread Inclusion

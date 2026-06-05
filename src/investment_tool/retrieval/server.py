@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.reporting import start_reporter
 from investment_tool.runtime.config import SourceProfile, load_x_source_profile
+from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
+from investment_tool.runtime.reporting import start_reporter
 
 
-DEFAULT_DATA_DIR = Path("~/investment-tool-data").expanduser()
 DEFAULT_PUBLIC_BASE_URL = "http://localhost:8787"
 DEFAULT_PORT = 8787
 SOURCE_PROFILE: SourceProfile = load_x_source_profile()
@@ -79,7 +79,7 @@ def parse_frontmatterish_markdown(path: Path) -> dict[str, Any]:
     title = lines[0].removeprefix("# ").strip() if lines else path.stem
     data: dict[str, Any] = {
         "title": title,
-        "evidence_path": path,
+        "evidence_path": portable_path(path),
         "evidence_markdown": text,
         "evidence_excerpt": excerpt_from_markdown(text),
     }
@@ -200,9 +200,12 @@ class EvidenceStore:
     def __init__(self, data_dir: Path, public_base_url: str) -> None:
         self.data_dir = data_dir
         self.public_base_url = public_base_url.rstrip("/")
-        self.x_threads_dir = data_dir / "x_threads"
-        self.evidence_dir = self.x_threads_dir / "evidence"
-        self.thread_json_dir = self.x_threads_dir / "thread_json"
+        self.paths = storage_paths(data_dir)
+        self.x_root = self.paths.x_root
+        self.evidence_dir = self.paths.legacy_x_evidence
+        self.thread_json_dir = self.paths.x_records
+        self.threads_dir = self.paths.x_threads_html
+        self.media_dir = self.paths.x_media
         self.memory_dir = data_dir / "memory" / "tickers"
 
     def evidence_records(self) -> list[dict[str, Any]]:
@@ -495,9 +498,9 @@ class InvestmentToolActionHandler(BaseHTTPRequestHandler):
                 ticker = api_path.removeprefix("/ticker/").removesuffix("/memory").strip("/")
                 self.send_json(self.store.ticker_memory(ticker))
             elif path.startswith("/threads/"):
-                self.send_file(self.store.x_threads_dir / "threads" / path.removeprefix("/threads/"))
+                self.send_file(self.store.threads_dir / path.removeprefix("/threads/"))
             elif path.startswith("/media/"):
-                self.send_file(self.store.x_threads_dir / "media" / path.removeprefix("/media/"))
+                self.send_file(self.store.media_dir / path.removeprefix("/media/"))
             elif path.startswith("/evidence/"):
                 self.send_file(self.store.evidence_dir / path.removeprefix("/evidence/"))
             else:
@@ -542,7 +545,11 @@ class InvestmentToolActionHandler(BaseHTTPRequestHandler):
 
     def send_file(self, path: Path) -> None:
         resolved = path.resolve()
-        allowed_roots = [self.store.x_threads_dir.resolve()]
+        allowed_roots = [
+            self.store.threads_dir.resolve(),
+            self.store.media_dir.resolve(),
+            self.store.evidence_dir.resolve(),
+        ]
         if not any(str(resolved).startswith(str(root)) for root in allowed_roots):
             self.send_json({"error": "forbidden"}, status=403)
             return
@@ -569,7 +576,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the investment evidence Action backend.")
     parser.add_argument("--source-config", default="config/sources/x_accounts.json")
     parser.add_argument("--source-id", default="")
-    parser.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
+    parser.add_argument("--data-dir", default="")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--public-base-url", default="")
@@ -583,16 +590,16 @@ def main() -> int:
         or os.environ.get("INVESTMENT_TOOL_PUBLIC_BASE_URL")
         or DEFAULT_PUBLIC_BASE_URL
     )
-    data_dir = Path(args.data_dir).expanduser()
+    data_dir = resolve_portable_path(args.data_dir) if args.data_dir else storage_paths().root
     InvestmentToolActionHandler.store = EvidenceStore(data_dir, public_base_url)
     InvestmentToolActionHandler.public_base_url = public_base_url.rstrip("/")
     reporter = start_reporter(
         "action_server",
         mode="serve_forever",
-        data_dir=data_dir,
+        data_dir=portable_path(data_dir),
         public_base_url=public_base_url.rstrip("/"),
-        x_evidence_files=len(list((data_dir / "x_threads" / "evidence").glob("*.md"))),
-        hardcore_evidence_files=len(list((data_dir / "hardcore" / "evidence").glob("*.md"))),
+        x_evidence_files=len(list(storage_paths(data_dir).legacy_x_evidence.glob("*.md"))),
+        article_evidence_files=len(list(storage_paths(data_dir).legacy_articles_evidence.glob("*.md"))),
         api_usage_available="request_counts_only",
     )
 

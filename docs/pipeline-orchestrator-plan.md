@@ -132,7 +132,7 @@ scanning data files and recent logs.
 Runtime workflow files live outside the repo:
 
 ```text
-/Users/burhanhalilov/investment-tool-data/pipeline/
+<data>/workflow/
   logs/
     20260604_153000__workflow-update.log
     latest.log

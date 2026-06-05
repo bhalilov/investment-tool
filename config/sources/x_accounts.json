@@ -15,9 +15,7 @@
         "user_id": "2033476611149066240",
         "display_name": "AJ Investment Research"
       },
-      "storage": {
-        "data_root": "/Users/burhanhalilov/investment-tool-data/x_threads"
-      },
+      "storage": {},
       "thread_rules": "config/rules/thread_reconstruction.default.json",
       "media_rules": "config/rules/media.default.json",
       "user_specifics": {

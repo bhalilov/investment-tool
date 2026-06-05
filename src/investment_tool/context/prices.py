@@ -16,10 +16,10 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from investment_tool.runtime.env import load_env
+from investment_tool.runtime.paths import portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
 
 
-DEFAULT_DATA_DIR = Path("~/investment-tool-data").expanduser()
 DEFAULT_CONFIG = Path("config/market_price_universe.json")
 MASSIVE_BASE = "https://api.massive.com"
 YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
@@ -263,7 +263,7 @@ def fetch_listing(symbol: str, market: str, start: str, end: str, api_key: str) 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Sync daily OHLCV prices for tracked companies.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
-    parser.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
+    parser.add_argument("--data-dir", default="")
     parser.add_argument("--from", dest="start", default="")
     parser.add_argument("--to", dest="end", default=dt.date.today().isoformat())
     parser.add_argument("--env", default=".env")
@@ -274,18 +274,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     api_key = os.environ.get("MASSIVE_API_KEY", "").strip()
     config_path = Path(args.config)
     config = json.loads(config_path.read_text(encoding="utf-8"))
+    storage = storage_paths(args.data_dir or None)
+    data_dir = storage.root
     start = args.start or config.get("start_date") or "2026-03-01"
     end = args.end
     companies = config.get("companies") or []
     total_listings = sum(len(company.get("listings") or []) for company in companies)
     reporter = start_reporter(
-        "market_prices",
+        "prices",
         total=total_listings,
         every_items=3,
         every_seconds=30,
         mode="sync",
-        config=config_path.resolve(),
-        data_dir=Path(args.data_dir).expanduser(),
+        config=portable_path(config_path.resolve()),
+        data_dir=portable_path(data_dir),
         start=start,
         end=end,
         companies=len(companies),
@@ -293,15 +295,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         massive_key_present=str(bool(api_key)).lower(),
         provider_usage_available="false",
     )
-    out_root = Path(args.data_dir).expanduser() / "market_prices"
-    daily_dir = out_root / "daily_ohlcv"
+    out_root = storage.prices_root
+    daily_dir = storage.prices_daily
     daily_dir.mkdir(parents=True, exist_ok=True)
 
     manifest: dict[str, Any] = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "start": start,
         "end": end,
-        "config": str(config_path.resolve()),
+        "config": portable_path(config_path.resolve()),
         "companies": [],
         "errors": [],
     }
@@ -356,7 +358,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "source": meta.get("source"),
                         "rows": len(rows),
                         "currency": meta.get("currency"),
-                        "path": str(out_path),
+                        "path": portable_path(out_path),
                     }
                 )
                 stats["processed"] += 1
@@ -394,7 +396,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         stats,
         companies=len(companies),
         listings=total_listings,
-        manifest=manifest_path,
+        manifest=portable_path(manifest_path),
     )
     return 0 if not manifest["errors"] else 1
 

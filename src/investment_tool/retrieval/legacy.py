@@ -26,14 +26,11 @@ from typing import Any
 
 from investment_tool.analysis.openai import OPENAI_API_BASE, request_json as openai_request_json
 from investment_tool.runtime.env import load_env
-from investment_tool.runtime.reporting import start_reporter
 from investment_tool.runtime.config import SourceProfile, load_x_source_profile, source_identity, source_label
+from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
+from investment_tool.runtime.reporting import start_reporter
 
 
-DEFAULT_DATA_DIR = Path("~/investment-tool-data").expanduser()
-DEFAULT_THREAD_JSON_DIR = DEFAULT_DATA_DIR / "x_threads" / "thread_json"
-DEFAULT_EVIDENCE_DIR = DEFAULT_DATA_DIR / "x_threads" / "evidence"
-DEFAULT_MANIFEST_PATH = DEFAULT_DATA_DIR / "x_threads" / "vector_store_sync_manifest.json"
 DEFAULT_PUBLIC_BASE_URL = "http://localhost:8787"
 SOURCE_PROFILE: SourceProfile = load_x_source_profile()
 SOURCE_USERNAME = SOURCE_PROFILE.username
@@ -135,7 +132,7 @@ def media_urls(record: dict[str, Any], public_base_url: str) -> list[str]:
         if wanted_keys:
             items = [(key, value) for key, value in items if str(key) in wanted_keys]
         for _, value in items:
-            path = Path(str(value))
+            path = resolve_portable_path(str(value))
             if path.name:
                 urls.append(web_join(public_base_url, "media", path.name))
     return list(dict.fromkeys(urls))
@@ -488,8 +485,8 @@ def iter_thread_paths(thread_json_dir: Path) -> list[Path]:
 
 
 def generate_evidence_documents(args: argparse.Namespace) -> tuple[int, int, int]:
-    thread_json_dir = Path(args.thread_json_dir).expanduser()
-    evidence_dir = Path(args.evidence_dir).expanduser()
+    thread_json_dir = resolve_portable_path(args.thread_json_dir)
+    evidence_dir = resolve_portable_path(args.evidence_dir)
     paths = iter_thread_paths(thread_json_dir)
     if args.limit:
         paths = paths[: args.limit]
@@ -570,6 +567,13 @@ def sync_threads(args: argparse.Namespace) -> int:
     env_path = Path(args.env_file).expanduser()
     load_env(env_path)
     configure_source(load_x_source_profile(args.source_config, args.source_id))
+    storage = storage_paths()
+    if not args.thread_json_dir:
+        args.thread_json_dir = str(storage.x_records)
+    if not args.evidence_dir:
+        args.evidence_dir = str(storage.legacy_x_evidence)
+    if not args.manifest:
+        args.manifest = str(storage.legacy_x_manifest)
     if not args.public_base_url:
         args.public_base_url = (
             os.environ.get("INVESTMENT_TOOL_PUBLIC_BASE_URL")
@@ -577,12 +581,12 @@ def sync_threads(args: argparse.Namespace) -> int:
         )
     if not args.vector_store_name:
         args.vector_store_name = f"{source_label(SOURCE_PROFILE)} X Threads"
-    evidence_dir = Path(args.evidence_dir).expanduser()
-    manifest_path = Path(args.manifest).expanduser()
+    evidence_dir = resolve_portable_path(args.evidence_dir)
+    manifest_path = resolve_portable_path(args.manifest)
     initial_paths = iter_evidence_paths(evidence_dir)
     planned_total = len(initial_paths)
     if not args.upload_only:
-        planned_total = len(iter_thread_paths(Path(args.thread_json_dir).expanduser()))
+        planned_total = len(iter_thread_paths(resolve_portable_path(args.thread_json_dir)))
         if args.limit:
             planned_total = min(planned_total, args.limit)
     reporter = start_reporter(
@@ -594,8 +598,8 @@ def sync_threads(args: argparse.Namespace) -> int:
         generate_only=str(args.generate_only).lower(),
         upload_only=str(args.upload_only).lower(),
         force=str(args.force).lower(),
-        evidence_dir=evidence_dir,
-        manifest=manifest_path,
+        evidence_dir=portable_path(evidence_dir),
+        manifest=portable_path(manifest_path),
         evidence_files=len(initial_paths),
         openai_usage_available="file_counts_only",
     )
@@ -617,7 +621,7 @@ def sync_threads(args: argparse.Namespace) -> int:
                 uploaded=0,
                 skipped=0,
                 failed=gen_failed,
-                manifest=manifest_path,
+                manifest=portable_path(manifest_path),
             )
             return 1 if gen_failed else 0
 
@@ -701,7 +705,7 @@ def sync_threads(args: argparse.Namespace) -> int:
                 "content_hash": content_hash,
                 "file_id": new_file_id,
                 "vector_store_file_id": vector_file_id,
-                "evidence_path": str(path),
+                "evidence_path": portable_path(path),
                 "thread_id": metadata.get("thread_id", ""),
                 "primary_ticker": metadata.get("primary_ticker", ""),
                 "date": metadata.get("date", ""),
@@ -736,7 +740,7 @@ def sync_threads(args: argparse.Namespace) -> int:
         generated_failed=gen_failed,
         **stats,
         dry_run=str(args.dry_run).lower(),
-        manifest=manifest_path,
+        manifest=portable_path(manifest_path),
     )
     return 1 if stats["failed"] else 0
 
@@ -745,9 +749,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Sync captured X source threads into an OpenAI vector store.")
     parser.add_argument("--source-config", default="config/sources/x_accounts.json")
     parser.add_argument("--source-id", default="")
-    parser.add_argument("--thread-json-dir", default=str(DEFAULT_THREAD_JSON_DIR))
-    parser.add_argument("--evidence-dir", default=str(DEFAULT_EVIDENCE_DIR))
-    parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST_PATH))
+    parser.add_argument("--thread-json-dir", default="")
+    parser.add_argument("--evidence-dir", default="")
+    parser.add_argument("--manifest", default="")
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--vector-store-id", default="")
     parser.add_argument("--vector-store-name", default="")

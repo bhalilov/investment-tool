@@ -26,7 +26,7 @@ records, Markdown evidence, vector uploads, manifests, or AI context.
 ## Target Workflow Logs
 
 Workflow v1 must also write plain AI-readable `.log` files under runtime
-`pipeline/logs`.
+`workflow/logs`.
 
 Required files:
 
@@ -44,4 +44,4 @@ Logs should include:
 - counts and notes;
 - final status.
 
-Locks live under runtime `pipeline/locks` as plain stale-timeout lock files.
+Locks live under runtime `workflow/locks` as plain stale-timeout lock files.

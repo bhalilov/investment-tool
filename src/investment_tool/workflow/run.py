@@ -1,4 +1,4 @@
-"""Top-level pipeline and maintenance orchestrator."""
+"""Top-level workflow and maintenance orchestrator."""
 
 from __future__ import annotations
 
@@ -11,8 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from investment_tool.runtime.reporting import start_reporter
 from investment_tool.runtime.env import load_env
+from investment_tool.runtime.paths import portable_path, storage_paths
+from investment_tool.runtime.reporting import start_reporter
 from investment_tool.sources.x.jobs import main as main_x_job, run_x_action
 
 
@@ -47,13 +48,8 @@ def iso_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
-def runtime_data_root() -> Path:
-    configured = os.environ.get("INVESTMENT_TOOL_DATA_DIR", "").strip()
-    return Path(configured).expanduser() if configured else Path("~/investment-tool-data").expanduser()
-
-
 def workflow_root() -> Path:
-    return runtime_data_root() / "pipeline"
+    return storage_paths().workflow_root
 
 
 def acquire_workflow_lock(lock_path: Path, stale_seconds: int = DEFAULT_LOCK_STALE_SECONDS) -> None:
@@ -186,7 +182,7 @@ def workflow_x_namespace(args: argparse.Namespace, **extra: object) -> argparse.
 
 
 def screenshot_inbox_paths() -> list[Path]:
-    inbox = runtime_data_root() / "manual_threads" / "inbox"
+    inbox = storage_paths().screenshots_inbox
     if not inbox.exists():
         return []
     return sorted(path for path in inbox.iterdir() if path.is_file() and path.suffix.lower() in SCREENSHOT_SUFFIXES)
@@ -197,14 +193,14 @@ def run_screenshots_stage(args: argparse.Namespace) -> int:
 
     paths = screenshot_inbox_paths()
     if not paths:
-        print(f"SCREENSHOTS_INBOX={runtime_data_root() / 'manual_threads' / 'inbox'}")
+        print(f"SCREENSHOTS_INBOX={portable_path(storage_paths().screenshots_inbox)}")
         print("SCREENSHOTS_FOUND=0")
         return 0
     argv = [str(path) for path in paths]
     argv.extend(
         [
             "--output-dir",
-            str(runtime_data_root() / "manual_threads"),
+            portable_path(storage_paths().screenshots_root),
             "--source-config",
             getattr(args, "source_config", "config/sources/x_accounts.json"),
             "--source-id",
@@ -266,27 +262,44 @@ def run_stage(stage: str, args: argparse.Namespace) -> StageResult:
 
 
 def run_workflow_check(command: str) -> int:
-    root = runtime_data_root()
+    paths = storage_paths()
+    root = paths.root
     checks = {
         "data_root": root,
-        "x_thread_json": root / "x_threads" / "thread_json",
-        "x_raw_api": root / "x_threads" / "raw_api",
-        "x_media": root / "x_threads" / "media",
-        "media_analysis": root / "x_threads" / "media_analysis",
-        "manual_inbox": root / "manual_threads" / "inbox",
-        "market_prices": root / "market_prices",
-        "workflow_logs": root / "pipeline" / "logs",
-        "workflow_locks": root / "pipeline" / "locks",
+        "x_records": paths.x_records,
+        "x_raw": paths.x_raw,
+        "x_media": paths.x_media,
+        "x_descriptions": paths.x_descriptions,
+        "screenshots_inbox": paths.screenshots_inbox,
+        "prices": paths.prices_root,
+        "presentation_indexes": paths.indexes,
+        "workflow_logs": paths.workflow_logs,
+        "workflow_locks": paths.workflow_locks,
+    }
+    legacy_checks = {
+        "legacy_x_threads": root / "x_threads",
+        "legacy_manual_threads": root / "manual_threads",
+        "legacy_market_prices": root / "market_prices",
+        "legacy_hardcore": root / "hardcore",
+        "legacy_pipeline": root / "pipeline",
     }
     print(f"WORKFLOW_CHECK={command}")
     missing = 0
     for name, path in checks.items():
         exists = path.exists()
         count = len(list(path.iterdir())) if exists and path.is_dir() else 0
-        print(f"{name.upper()} path={path} exists={str(exists).lower()} items={count}")
+        print(f"{name.upper()} path={portable_path(path)} exists={str(exists).lower()} items={count}")
         if name != "data_root" and not exists:
             missing += 1
+    legacy_present = 0
+    for name, path in legacy_checks.items():
+        exists = path.exists()
+        count = len(list(path.iterdir())) if exists and path.is_dir() else 0
+        if exists:
+            legacy_present += 1
+        print(f"{name.upper()} path={portable_path(path)} exists={str(exists).lower()} items={count}")
     print(f"MISSING_PATHS={missing}")
+    print(f"LEGACY_PATHS_PRESENT={legacy_present}")
     return 0
 
 
@@ -345,8 +358,8 @@ def run_workflow(argv: Sequence[str] | None = None) -> int:
         failed = [result for result in results if result.status == "failed"]
         status = "failed" if failed else "success"
         log_path = write_workflow_log(run_id, command_text, stages, results, status)
-        reporter.done(status=status, log=log_path)
-        print(f"WORKFLOW_LOG={log_path}")
+        reporter.done(status=status, log=portable_path(log_path))
+        print(f"WORKFLOW_LOG={portable_path(log_path)}")
         return 1 if failed else 0
     finally:
         release_workflow_lock(lock_path)

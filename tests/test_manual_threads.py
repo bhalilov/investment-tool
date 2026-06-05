@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from investment_tool import manual_threads
+from investment_tool.runtime.paths import resolve_portable_path
 
 
 def tiny_png(width: int = 2, height: int = 3) -> bytes:
@@ -63,7 +64,7 @@ class ManualThreadsTests(unittest.TestCase):
 
             bundle_path = manual_threads.write_bundle(record, [source], out, force=False)
             written = json.loads(bundle_path.read_text(encoding="utf-8"))
-            imported_path = Path(written["screenshots"][0]["imported_path"])
+            imported_path = resolve_portable_path(written["screenshots"][0]["imported_path"], root)
             bundle_exists = bundle_path.exists()
             imported_exists = imported_path.exists()
             imported_bytes = imported_path.read_bytes()

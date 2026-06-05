@@ -7,7 +7,7 @@ This spec records current market data behavior and the locked target gaps.
 Current price sync:
 
 - reads `config/market_price_universe.json`;
-- writes runtime `market_prices/daily_ohlcv`;
+- writes runtime `context/prices/daily`;
 - uses Massive first when appropriate for US symbols;
 - falls back to Yahoo chart data;
 - converts non-USD prices to USD;

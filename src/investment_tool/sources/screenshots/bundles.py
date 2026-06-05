@@ -19,11 +19,10 @@ from investment_tool.context.descriptions import image_data_url
 from investment_tool.analysis.openai import call_responses_json
 from investment_tool.runtime.reporting import estimate_openai_cost_usd, start_reporter
 from investment_tool.runtime.env import load_env
+from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths
 from investment_tool.runtime.config import SourceProfile, load_x_source_profile, source_identity, source_label
 
 
-DEFAULT_DATA_DIR = Path("~/investment-tool-data").expanduser()
-DEFAULT_OUTPUT_DIR = DEFAULT_DATA_DIR / "manual_threads"
 DEFAULT_OPENAI_MODEL = "gpt-5.5"
 SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 SOURCE_PROFILE: SourceProfile = load_x_source_profile()
@@ -141,8 +140,8 @@ def screenshot_record(index: int, source_path: Path, dest_path: Path, digest: st
     width, height = image_size(source_path)
     return {
         "index": index,
-        "source_path": str(source_path),
-        "imported_path": str(dest_path),
+        "source_path": source_path.name,
+        "imported_path": portable_path(dest_path),
         "original_filename": source_path.name,
         "mime_type": mimetypes.guess_type(source_path.name)[0] or "application/octet-stream",
         "file_size": source_path.stat().st_size,
@@ -203,7 +202,7 @@ def write_bundle(record: dict[str, Any], sources: list[Path], output_dir: Path, 
     if len(sources) != len(record["screenshots"]):
         raise ValueError("Source count does not match screenshot record count.")
     for source, screenshot in zip(sources, record["screenshots"]):
-        shutil.copy2(source, screenshot["imported_path"])
+        shutil.copy2(source, resolve_portable_path(screenshot["imported_path"]))
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 
@@ -404,7 +403,7 @@ def analyze_bundle_with_openai(record: dict[str, Any], model: str) -> dict[str, 
                 "text": f"Screenshot index {screenshot['index']}: {screenshot['original_filename']}",
             }
         )
-        content.append({"type": "input_image", "image_url": image_data_url(Path(screenshot["imported_path"]))})
+        content.append({"type": "input_image", "image_url": image_data_url(resolve_portable_path(screenshot["imported_path"]))})
     reconstruction, _ = call_responses_json(
         api_key=api_key,
         model=model,
@@ -426,7 +425,7 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
     load_env(Path(args.env).expanduser())
     configure_source(load_x_source_profile(args.source_config, args.source_id))
     sources = normalize_sources(args.paths, args.source)
-    output_dir = Path(args.output_dir).expanduser()
+    output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage_paths().screenshots_root
     bundle_id = slugify(args.bundle_id) if args.bundle_id else bundle_id_for(sources, args.bundle_name)
     model = args.model or os.environ.get("OPENAI_MANUAL_THREAD_MODEL") or DEFAULT_OPENAI_MODEL
     reporter = start_reporter(
@@ -435,7 +434,7 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
         every_items=5,
         every_seconds=30,
         mode="dry_run" if args.dry_run else "import",
-        output_dir=output_dir,
+        output_dir=portable_path(output_dir),
         bundle_id=bundle_id,
         analyze=bool(args.analyze),
         model=model if args.analyze else "",
@@ -452,15 +451,15 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
             print(f"Would import {screenshot['source_path']} -> {screenshot['imported_path']}")
         if args.analyze:
             print("Would run manual thread reconstruction after import.")
-        reporter.done(bundle_path=bundle_path(output_dir, bundle_id), screenshots=len(record["screenshots"]))
+        reporter.done(bundle_path=portable_path(bundle_path(output_dir, bundle_id)), screenshots=len(record["screenshots"]))
         return 0
 
     path = write_bundle(record, sources, output_dir, force=args.force)
-    reporter.checkpoint(processed=len(sources), force=True, bundle_path=path)
+    reporter.checkpoint(processed=len(sources), force=True, bundle_path=portable_path(path))
     if args.analyze:
         reconstruction = analyze_bundle_with_openai(record, model)
         if not reconstruction:
-            reporter.fail(bundle_path=path, reason="OPENAI_API_KEY is not configured")
+            reporter.fail(bundle_path=portable_path(path), reason="OPENAI_API_KEY is not configured")
             return 1
         record["analysis_stage"] = "manual_reconstruction_complete"
         record["status"] = "reconstructed"
@@ -474,7 +473,7 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
         record["estimated_openai_cost_usd"] = estimate_openai_cost_usd(model, input_tokens, output_tokens)
         path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         reporter.done(
-            bundle_path=path,
+            bundle_path=portable_path(path),
             stitch_groups=len(record["stitch_groups"]),
             reconstructed_threads=len(record["reconstructed_threads"]),
             input_tokens=input_tokens,
@@ -482,8 +481,8 @@ def import_manual_thread_bundle(args: argparse.Namespace) -> int:
             estimated_openai_cost_usd=record["estimated_openai_cost_usd"],
         )
     else:
-        reporter.done(bundle_path=path, screenshots=len(record["screenshots"]))
-    print(f"BUNDLE_PATH={path}")
+        reporter.done(bundle_path=portable_path(path), screenshots=len(record["screenshots"]))
+    print(f"BUNDLE_PATH={portable_path(path)}")
     return 0
 
 
@@ -493,7 +492,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("paths", nargs="*", help="Screenshot image paths.")
     parser.add_argument("--source", action="append", default=[], help="Screenshot image path; may be repeated.")
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--output-dir", default="")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--source-config", default="config/sources/x_accounts.json")
     parser.add_argument("--source-id", default="")

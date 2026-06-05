@@ -15,6 +15,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from investment_tool.runtime.paths import portable_path
+
 
 API_BASE = "https://api.x.com/2"
 TWEET_FIELDS = ",".join(
@@ -339,5 +341,5 @@ def download_photos(media: dict[str, dict], media_dir: Path, wanted_keys: set[st
                 print(f"WARN: Could not download media {key}: {exc}", file=sys.stderr)
                 continue
         if path.exists():
-            paths[key] = str(path)
+            paths[key] = portable_path(path)
     return paths

@@ -7,10 +7,7 @@
       "module": "articles",
       "source_type": "web_article_archive",
       "display_name": "AJ Investment Research Hardcore/Ghost",
-      "storage": {
-        "archive_dir": "/Users/burhanhalilov/investment-tool-data/unsorted/AJ Investment Research PDFs",
-        "output_dir": "/Users/burhanhalilov/investment-tool-data/hardcore"
-      },
+      "storage": {},
       "html_cleanup_patterns": [
         "Saved from AJ Investment Research on .*?https://\\S+"
       ],

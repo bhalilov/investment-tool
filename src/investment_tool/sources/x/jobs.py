@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Sequence
 
 from investment_tool.runtime.env import load_env
+from investment_tool.runtime.paths import data_root_for_x_root, portable_path, resolve_portable_path
 from investment_tool.runtime.reporting import start_reporter
 from investment_tool.sources.x.api import XClient, refresh_x_user_token
 from investment_tool.sources.x.capture import (
@@ -35,7 +36,7 @@ X_ACTIONS = {"x-capture", "x-reindex", "x-rerender", "x-raw-rebuild", "x-repair-
 
 def apply_context_data_root(context: XCaptureContext) -> None:
     if context.profile.data_root and not os.environ.get("INVESTMENT_TOOL_DATA_DIR"):
-        os.environ["INVESTMENT_TOOL_DATA_DIR"] = str(Path(context.profile.data_root).expanduser().parent)
+        os.environ["INVESTMENT_TOOL_DATA_DIR"] = str(data_root_for_x_root(context.profile.data_root))
 
 
 def add_x_common_args(parser: argparse.ArgumentParser) -> None:
@@ -157,24 +158,24 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
     context = load_x_context_from_args(args)
 
     run_id = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    paths = prepare_x_capture_paths(run_id)
+    paths = prepare_x_capture_paths(run_id, context.profile.data_root)
 
     if action == "x-repair-media-paths":
-        stats = repair_cached_media_paths(paths.json_dir, paths.root / "cleanup_backups")
+        stats = repair_cached_media_paths(paths.json_dir, paths.root / "backups")
         print_key_values(stats)
         return 0 if int(stats["failed"]) == 0 else 1
 
     if action == "x-raw-rebuild":
         staging_dir = (
-            Path(args.rebuild_staging_dir).expanduser()
+            resolve_portable_path(args.rebuild_staging_dir)
             if getattr(args, "rebuild_staging_dir", "")
-            else paths.root / "rebuild_staging" / dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+            else paths.root / "rebuild" / dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         )
         reporter = start_reporter(
             "x-capture",
             mode="raw_rebuild_replace" if getattr(args, "replace_generated_json", False) else "raw_rebuild_staging",
-            raw_dir=paths.root / "raw_api",
-            staging_dir=staging_dir,
+            raw_dir=portable_path(paths.root / "raw"),
+            staging_dir=portable_path(staging_dir),
             replace_generated_json=getattr(args, "replace_generated_json", False),
         )
         manifest = rebuild_from_raw_api(paths.root, staging_dir, getattr(args, "replace_generated_json", False), context)
@@ -201,31 +202,40 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
         ai_pipeline="separate_thread_passes",
         x_usage_available="usage_endpoint_when_supported",
         openai_usage_available="not_used_by_capture",
-        raw_dir=paths.raw_dir,
+        raw_dir=portable_path(paths.raw_dir),
     )
 
     if action == "x-reindex":
         ignored = apply_cached_relevance_gate(paths.root, paths.json_dir, paths.threads_dir, context)
         entries = entries_from_cached_json(paths.json_dir, paths.threads_dir, context)
-        render_all_indexes(paths.root, entries, load_owned_tickers())
-        print(f"INDEX={paths.root / 'indexes' / 'index.html'}")
+        render_all_indexes(paths.presentation_root, entries, load_owned_tickers())
+        index_path = paths.presentation_root / "indexes" / "index.html"
+        print(f"INDEX={portable_path(index_path)}")
         print("REINDEX_ONLY=true")
         print(f"THREADS={len(entries)}")
         print(f"IGNORED={ignored}")
         print("API_CALLS=0")
-        reporter.done(mode="reindex", threads=len(entries), ignored=ignored, api_calls=0, index=paths.root / "indexes" / "index.html")
+        reporter.done(mode="reindex", threads=len(entries), ignored=ignored, api_calls=0, index=portable_path(index_path))
         return 0
 
     if action == "x-rerender":
         ignored = apply_cached_relevance_gate(paths.root, paths.json_dir, paths.threads_dir, context)
-        entries = rerender_cached_threads(paths.root, paths.json_dir, paths.threads_dir, args.conversation_id, context)
-        render_all_indexes(paths.root, entries, load_owned_tickers())
-        print(f"INDEX={paths.root / 'indexes' / 'index.html'}")
+        entries = rerender_cached_threads(
+            paths.root,
+            paths.json_dir,
+            paths.threads_dir,
+            args.conversation_id,
+            context,
+            paths.presentation_root,
+        )
+        render_all_indexes(paths.presentation_root, entries, load_owned_tickers())
+        index_path = paths.presentation_root / "indexes" / "index.html"
+        print(f"INDEX={portable_path(index_path)}")
         print("RERENDER_ONLY=true")
         print(f"THREADS={len(entries)}")
         print(f"IGNORED={ignored}")
         print("API_CALLS=0")
-        reporter.done(mode="rerender", threads=len(entries), ignored=ignored, api_calls=0, index=paths.root / "indexes" / "index.html")
+        reporter.done(mode="rerender", threads=len(entries), ignored=ignored, api_calls=0, index=portable_path(index_path))
         return 0
 
     token = os.environ.get("X_USER_ACCESS_TOKEN", "").strip()
@@ -236,7 +246,7 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
     if action == "x-recover-media":
         client = XClient(token, paths.raw_dir, refresh_callback=lambda: refresh_x_user_token(env_path))
         stats = recover_missing_media_metadata(paths.root, client, context)
-        reporter.done(**stats, raw_dir=paths.raw_dir)
+        reporter.done(**stats, raw_dir=portable_path(paths.raw_dir))
         print_key_values(stats)
         return 0
 

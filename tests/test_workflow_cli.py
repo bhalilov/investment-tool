@@ -3,7 +3,6 @@ import io
 import os
 import tempfile
 import unittest
-from pathlib import Path
 
 from investment_tool.cli import main as cli_main
 
@@ -34,6 +33,13 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertIn("DRY_RUN=true", stdout)
         self.assertIn("STAGES=x-capture,screenshots,prices,descriptions,render", stdout)
 
+    def test_storage_help_lists_migrate(self):
+        code, stdout, _ = self.call_cli(["storage", "--help"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("migrate", stdout)
+        self.assertIn("clean-old", stdout)
+
     def test_workflow_rebuild_requires_stage_or_all(self):
         code, _, stderr = self.call_cli(["workflow", "rebuild"])
 
@@ -53,7 +59,7 @@ class WorkflowCliTests(unittest.TestCase):
                     os.environ["INVESTMENT_TOOL_DATA_DIR"] = old_data_root
 
         self.assertEqual(code, 0)
-        self.assertIn(f"DATA_ROOT path={Path(tmp)}", stdout)
+        self.assertIn("DATA_ROOT path=<data>", stdout)
         self.assertIn("MISSING_PATHS=", stdout)
 
 

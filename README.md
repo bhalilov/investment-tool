@@ -5,9 +5,10 @@ sources.
 
 ## Current Layout
 
-- Code: `/Users/burhanhalilov/code/investment-tool`
-- Runtime data: `/Users/burhanhalilov/investment-tool-data`
-- Main X index: `/Users/burhanhalilov/investment-tool-data/x_threads/indexes/index.html`
+- Code: this repo checkout, referred to as `<repo>`
+- Runtime data: `<data>`, resolved from `--data-dir`, `INVESTMENT_TOOL_DATA_DIR`,
+  `INVESTMENT_TOOL_HOME/data`, or repo-local `data/`
+- Main X index: `<data>/presentation/indexes/index.html`
 
 Private data, raw API responses, screenshots, reports, logs, runtime data, and
 secrets must stay out of Git.
@@ -48,11 +49,22 @@ investment-tool workflow rebuild --all
 
 investment-tool workflow check
 investment-tool workflow doctor
+
+investment-tool storage migrate --dry-run
+investment-tool storage migrate --apply
+investment-tool storage migrate --verify-only
+investment-tool storage clean-old --dry-run
+investment-tool storage clean-old --apply
 ```
 
 `update`, `sync`, and `refresh` are aliases for the normal incremental workflow.
 `check` and `doctor` are read-only inspection aliases in v1. `rebuild` requires
 one or more `--stage` values or explicit `--all`.
+
+`storage migrate` is a rename/move cleanup for runtime data. It also writes
+plain `README.md` descriptions into the main runtime folders so the data is
+scanable without reading the code. After verification, `storage clean-old`
+deletes obsolete migrated legacy folders and old staging files.
 
 Direct stage commands still exist as compatibility launchers, but new
 production work should start from the `workflow` command group.

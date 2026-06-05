@@ -6,6 +6,7 @@ description = "Local configurable investment research capture and analysis tool"
 
 [project.scripts]
 investment-tool = "investment_tool.cli.main:main"
+investment-tool-storage = "investment_tool.workflow.storage:main"
 investment-tool-x-capture = "investment_tool.cli.legacy_x_capture:main"
 investment-tool-hardcore-capture = "investment_tool.sources.articles.ingest:main"
 investment-tool-market-prices = "investment_tool.context.prices:main"

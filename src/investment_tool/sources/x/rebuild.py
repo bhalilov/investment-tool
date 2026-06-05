@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from investment_tool.runtime.paths import portable_path
 from investment_tool.rules.filters import primary_label
 from investment_tool.rules.tickers import ticker_bucket_payload
 from investment_tool.sources.x.context import XCaptureContext
@@ -130,21 +131,21 @@ def clean_raw_rebuilt_thread_record(
 
 
 def replace_generated_thread_jsons(root: Path, staging_dir: Path) -> None:
-    for path in (root / "thread_json").glob("*.json"):
+    for path in (root / "records").glob("*.json"):
         path.unlink(missing_ok=True)
     for path in (root / "ignored").glob("*.json"):
         path.unlink(missing_ok=True)
-    for dated_thread_dir in root.glob("20??-??-??/thread_json"):
+    for dated_thread_dir in root.glob("20??-??-??/records"):
         if dated_thread_dir.is_dir():
             for path in dated_thread_dir.glob("*.json"):
                 path.unlink(missing_ok=True)
-    backup_root = root / "cleanup_backups"
+    backup_root = root / "backups"
     if backup_root.exists():
         shutil.rmtree(backup_root)
-    (root / "thread_json").mkdir(parents=True, exist_ok=True)
+    (root / "records").mkdir(parents=True, exist_ok=True)
     (root / "ignored").mkdir(parents=True, exist_ok=True)
-    for src in (staging_dir / "thread_json").glob("*.json"):
-        shutil.copy2(src, root / "thread_json" / src.name)
+    for src in (staging_dir / "records").glob("*.json"):
+        shutil.copy2(src, root / "records" / src.name)
     for src in (staging_dir / "ignored").glob("*.json"):
         shutil.copy2(src, root / "ignored" / src.name)
 
@@ -155,7 +156,7 @@ def rebuild_from_raw_api(
     replace_active: bool,
     context: XCaptureContext,
 ) -> dict[str, Any]:
-    raw_root = root / "raw_api"
+    raw_root = root / "raw"
     media_dir = root / "media"
     tweets, users, media, raw_stats = load_raw_api_archive(raw_root)
     media_paths = existing_local_media_paths(media_dir)
@@ -163,7 +164,7 @@ def rebuild_from_raw_api(
     by_conversation = group_raw_conversations(tweets, conversation_ids, context)
     if staging_dir.exists():
         shutil.rmtree(staging_dir)
-    thread_dir = staging_dir / "thread_json"
+    thread_dir = staging_dir / "records"
     ignored_dir = staging_dir / "ignored"
     thread_dir.mkdir(parents=True, exist_ok=True)
     ignored_dir.mkdir(parents=True, exist_ok=True)
@@ -178,7 +179,7 @@ def rebuild_from_raw_api(
         "written_ignored": 0,
         "missing_media_refs": 0,
         "ignored_reasons": {},
-        "staging_dir": str(staging_dir),
+        "staging_dir": portable_path(staging_dir),
         "replace_active": replace_active,
     }
     ignored_reasons: Counter[str] = Counter()
@@ -207,7 +208,7 @@ def rebuild_from_raw_api(
     stats["ignored_reasons"] = dict(ignored_reasons)
     manifest = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "x_root": str(root),
+        "x_root": portable_path(root),
         **stats,
     }
     (staging_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

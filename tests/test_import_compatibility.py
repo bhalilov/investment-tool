@@ -25,11 +25,14 @@ class ImportCompatibilityTests(unittest.TestCase):
         from investment_tool.presentation import indexes, threads
         from investment_tool.retrieval import legacy
         from investment_tool.rules import filters, tickers
+        from investment_tool.runtime import paths
         from investment_tool.sources.articles import ingest
         from investment_tool.sources.screenshots import bundles, reconstruct
         from investment_tool.sources.x import api, capture, media, rebuild, store
+        from investment_tool.workflow import storage
 
         self.assertTrue(hasattr(openai, "call_responses_json"))
+        self.assertTrue(callable(paths.storage_paths))
         self.assertTrue(callable(prices.main))
         self.assertTrue(callable(descriptions.main))
         self.assertTrue(callable(indexes.render_all_indexes))
@@ -45,6 +48,7 @@ class ImportCompatibilityTests(unittest.TestCase):
         self.assertTrue(callable(media.thread_local_media_paths))
         self.assertTrue(callable(rebuild.rebuild_from_raw_api))
         self.assertTrue(callable(store.rerender_cached_threads))
+        self.assertTrue(callable(storage.main))
 
 
 if __name__ == "__main__":

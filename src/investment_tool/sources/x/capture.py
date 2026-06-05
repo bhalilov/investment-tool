@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.presentation.indexes import render_all_indexes
+from investment_tool.runtime.paths import portable_path, resolve_portable_path, storage_paths_for_x_root
 from investment_tool.runtime.reporting import JobReporter
 from investment_tool.rules.filters import primary_label
 from investment_tool.rules.tickers import ticker_bucket_payload
@@ -84,22 +85,35 @@ class XCapturePaths:
     json_dir: Path
     media_dir: Path
     threads_dir: Path
+    presentation_root: Path
 
 
 def data_root() -> Path:
-    return Path(os.environ.get("INVESTMENT_TOOL_DATA_DIR", "~/investment-tool-data")).expanduser()
+    return storage_paths_for_x_root().root
 
 
-def prepare_x_capture_paths(run_id: str) -> XCapturePaths:
-    root = data_root() / "x_threads"
+def prepare_x_capture_paths(run_id: str, source_root: str | Path | None = None) -> XCapturePaths:
+    storage = storage_paths_for_x_root(source_root)
+    root = resolve_portable_path(source_root) if source_root else storage.x_root
     paths = XCapturePaths(
         root=root,
-        raw_dir=root / "raw_api" / run_id,
-        json_dir=root / "thread_json",
+        raw_dir=root / "raw" / run_id,
+        json_dir=root / "records",
         media_dir=root / "media",
-        threads_dir=root / "threads",
+        threads_dir=storage.x_threads_html,
+        presentation_root=storage.presentation_root,
     )
-    for folder in (paths.raw_dir, paths.json_dir, paths.media_dir, paths.threads_dir, root / "indexes"):
+    for folder in (
+        paths.raw_dir,
+        paths.json_dir,
+        paths.media_dir,
+        paths.threads_dir,
+        storage.indexes,
+        root / "ignored",
+        root / "rebuild",
+        root / "backups",
+        root / "usage",
+    ):
         folder.mkdir(parents=True, exist_ok=True)
     return paths
 
@@ -200,9 +214,9 @@ def missing_media_metadata_targets(json_dir: Path, raw_media: dict[str, dict]) -
 
 
 def recover_missing_media_metadata(root: Path, client: XClient, context: XCaptureContext) -> dict[str, Any]:
-    json_dir = root / "thread_json"
+    json_dir = root / "records"
     media_dir = root / "media"
-    tweets, users, media, raw_stats = load_raw_api_archive(root / "raw_api")
+    tweets, users, media, raw_stats = load_raw_api_archive(root / "raw")
     before_media_keys = set(media)
     targets = missing_media_metadata_targets(json_dir, media)
     target_tweet_ids = sorted(targets)
@@ -432,7 +446,7 @@ def run_live_x_capture(
                 local_media,
                 local_media_paths,
                 search_counts.get(conversation_id, 0),
-                paths.root,
+                paths.presentation_root,
                 context.username,
                 context.user_id,
             )
@@ -512,15 +526,16 @@ def run_live_x_capture(
         entry for entry in entries_from_cached_json(paths.json_dir, paths.threads_dir, context) if entry["conversation_id"] not in processed_ids
     )
 
-    render_all_indexes(paths.root, entries, load_owned_tickers())
-    emit_checkpoint(reporter, "INDEX_RENDER_DONE", entries=len(entries), index=paths.root / "indexes" / "index.html")
+    render_all_indexes(paths.presentation_root, entries, load_owned_tickers())
+    index_path = paths.presentation_root / "indexes" / "index.html"
+    emit_checkpoint(reporter, "INDEX_RENDER_DONE", entries=len(entries), index=portable_path(index_path))
     usage = write_usage_estimate(paths.root, run_id, client)
     return {
-        "index": paths.root / "indexes" / "index.html",
+        "index": portable_path(index_path),
         "threads": len(entries),
         "ignored": ignored_this_run,
-        "raw_api_dir": paths.raw_dir,
-        "media_dir": paths.media_dir,
+        "raw_api_dir": portable_path(paths.raw_dir),
+        "media_dir": portable_path(paths.media_dir),
         "api_calls": client.call_count,
         "unique_post_reads_estimate": usage["unique_post_ids_returned"],
         "estimated_x_cost_usd": usage["estimated_cost_usd"],

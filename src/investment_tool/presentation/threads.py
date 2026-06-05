@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.presentation.html import display_token, linkify_text
+from investment_tool.runtime.paths import resolve_portable_path
 from investment_tool.sources.x.threads import display_text, media_keys
 
 
@@ -75,7 +76,9 @@ def render_thread_html(
                 f"| {html.escape(str(m.get('width')))}x{html.escape(str(m.get('height')))}</div>"
             )
             if local:
-                media_html.append(f"<img src='{Path(local).as_uri()}' alt='downloaded X media'>")
+                media_file = resolve_portable_path(local)
+                media_src = os.path.relpath(media_file, path.parent)
+                media_html.append(f"<img src='{html.escape(media_src)}' alt='downloaded X media'>")
         item_author = author(item, users)
         cards.append(
             f"""

@@ -1,6 +1,6 @@
 # Media Handling Spec
 
-This spec records current media behavior before the package refactor.
+This spec records current media behavior.
 
 ## Ownership
 
@@ -34,7 +34,7 @@ metadata remains placeholder-only.
 ## Media Descriptions
 
 Media description reads downloaded image files and writes one JSON record per
-media key under runtime `x_threads/media_analysis`.
+media key under runtime `context/descriptions/x`.
 
 Current fields include:
 

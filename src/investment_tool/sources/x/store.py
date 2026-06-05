@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from investment_tool.presentation.indexes import render_all_indexes
+from investment_tool.runtime.paths import portable_path, resolve_portable_path
 from investment_tool.rules.tickers import ticker_bucket_payload
 from investment_tool.rules.filters import primary_label
 from investment_tool.sources.x.context import XCaptureContext
@@ -108,7 +109,7 @@ def cleanup_old_thread_versions(json_dir: Path, threads_dir: Path, conversation_
 
 def load_owned_tickers() -> set[str]:
     configured = os.environ.get("OWNED_POSITIONS_FILE", "").strip()
-    path = Path(configured).expanduser() if configured else Path.cwd() / DEFAULT_OWNED_POSITIONS_FILE
+    path = resolve_portable_path(configured) if configured else Path.cwd() / DEFAULT_OWNED_POSITIONS_FILE
     if not path.exists():
         return set()
     try:
@@ -249,7 +250,9 @@ def rerender_cached_threads(
     threads_dir: Path,
     conversation_id: str | None,
     context: XCaptureContext,
+    presentation_root: Path | None = None,
 ) -> list[dict[str, Any]]:
+    index_root = presentation_root or root
     entries: list[dict[str, Any]] = []
     for source_json_path in sorted(json_dir.glob("*.json")):
         try:
@@ -312,7 +315,7 @@ def rerender_cached_threads(
             local_media,
             local_media_paths,
             0,
-            root,
+            index_root,
             context.username,
             context.user_id,
         )
@@ -377,7 +380,7 @@ def repair_cached_media_paths(json_dir: Path, backup_root: Path) -> dict[str, in
         "failed": 0,
         "removed_media_path_refs": 0,
         "media_free_paths_cleared": 0,
-        "backup_dir": str(backup_dir),
+        "backup_dir": portable_path(backup_dir),
     }
     for path in sorted(json_dir.glob("*.json")):
         stats["scanned"] += 1
@@ -415,8 +418,14 @@ def repair_cached_media_paths(json_dir: Path, backup_root: Path) -> dict[str, in
     return stats
 
 
-def render_cached_indexes(root: Path, json_dir: Path, threads_dir: Path, context: XCaptureContext) -> tuple[list[dict[str, Any]], int]:
+def render_cached_indexes(
+    root: Path,
+    json_dir: Path,
+    threads_dir: Path,
+    context: XCaptureContext,
+    presentation_root: Path | None = None,
+) -> tuple[list[dict[str, Any]], int]:
     ignored = apply_cached_relevance_gate(root, json_dir, threads_dir, context)
     entries = entries_from_cached_json(json_dir, threads_dir, context)
-    render_all_indexes(root, entries, load_owned_tickers())
+    render_all_indexes(presentation_root or root, entries, load_owned_tickers())
     return entries, ignored

@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from investment_tool.runtime.paths import portable_path
+
 
 X_STATUS_RE = re.compile(r"https?://(?:mobile\.)?(?:x|twitter)\.com/[^/\s]+/status/(\d+)")
 
@@ -107,7 +109,7 @@ def existing_local_media_paths(media_dir: Path) -> dict[str, str]:
         return paths
     for path in sorted(media_dir.iterdir()):
         if path.is_file():
-            paths[path.stem] = str(path)
+            paths[path.stem] = portable_path(path)
     return paths
 
 
