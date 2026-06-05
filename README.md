@@ -41,12 +41,12 @@ Main package layout:
 | Folder | Purpose |
 | --- | --- |
 | `cli/` | Public command entrypoints |
-| `workflow/` | Top-level orchestration, checks, locks, logs, storage rename |
+| `workflow/` | Top-level orchestration, checks, locks, logs |
 | `runtime/` | Env loading, config loading, path resolution, reporting |
 | `feeds/` | Feed-specific capture/ingest code |
 | `context/` | Supporting context such as prices and image descriptions |
 | `analysis/` | Shared OpenAI helpers and future AI passes |
-| `retrieval/` | Legacy evidence/vector code and future retrieval memory |
+| `retrieval/` | Future retrieval memory |
 | `presentation/` | HTML thread pages and indexes |
 | `rules/` | Feed-neutral parsing/filtering rules |
 | `records/` | Canonical record shapes, as they become explicit |
@@ -76,7 +76,7 @@ Canonical runtime layout:
 <data>/
 ├── feeds/
 │   ├── x/{raw,records,media,ignored,usage}
-│   ├── articles/{archive,records,manifest.json}
+│   ├── articles/{archive,records,evidence,manifest.json}
 │   └── screenshots/{inbox,bundles,media,records}
 ├── context/
 │   ├── prices/{daily,hourly,intraday,manifest.json}
@@ -119,16 +119,6 @@ investment-tool workflow check
 investment-tool workflow doctor
 ```
 
-Storage maintenance:
-
-```bash
-investment-tool storage rename --dry-run
-investment-tool storage rename --apply
-investment-tool storage rename --verify-only
-investment-tool storage clean-old --dry-run
-investment-tool storage clean-old --apply
-```
-
 V1 scheduled update stage order:
 
 1. `x-capture`
@@ -146,7 +136,7 @@ Project rules:
 
 - Work from the repo, not from the runtime data folder.
 - Product logic belongs under `src/investment_tool/`.
-- `scripts/` is only for thin compatibility launchers or disposable probes.
+- `scripts/` is only for disposable probes.
 - Useful prototype logic must move into `src/investment_tool/` before it becomes
   relied upon.
 - Scheduled runs, manual runs, rebuilds, and production should use the same
@@ -168,7 +158,8 @@ Capture and analysis rules:
 - Phase 1 thread AI has no vector search.
 - Phase 2 retrieval/vector behavior is postponed until the AI/vector spec is
   finalized.
-- Existing legacy retrieval code is quarantined under `retrieval/legacy.py`.
+- Legacy vector sync and the old Custom GPT action server have been deleted.
+- Future retrieval/vector work must follow `docs/ai-vector-pass-design.md`.
 
 Git rules:
 
@@ -196,7 +187,8 @@ docs and should be treated as the source of truth when changing that area.
 | `docs/run-reporting-spec.md` | Job status/reporting conventions |
 | `docs/article-feed-spec.md` | Saved article archive ingest |
 | `docs/screenshot-feed-spec.md` | Manual screenshot bundles and reconstruction |
-| `docs/legacy-retrieval-note.md` | Quarantined legacy vector/evidence behavior |
+| `docs/legacy-retrieval-note.md` | Deleted vector/evidence behavior and reusable mechanics |
+| `docs/backlog.md` | Current implementation backlog |
 
 ## Verification
 
@@ -207,12 +199,6 @@ python3 -m py_compile src/investment_tool/*.py scripts/*.py tests/*.py
 python3 -m compileall -q src scripts tests
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 -m investment_tool.cli.main workflow check
-```
-
-For storage/path changes, also run:
-
-```bash
-PYTHONPATH=src python3 -m investment_tool.cli.main storage rename --verify-only
 ```
 
 No paid AI calls, X API calls, market data calls, or vector uploads should run

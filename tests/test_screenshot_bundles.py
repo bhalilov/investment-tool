@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from investment_tool import manual_threads
+from investment_tool.feeds.screenshots import bundles as screenshot_bundles
 from investment_tool.runtime.paths import resolve_portable_path
 
 
@@ -18,13 +18,13 @@ def tiny_png(width: int = 2, height: int = 3) -> bytes:
     )
 
 
-class ManualThreadsTests(unittest.TestCase):
+class ScreenshotBundlesTests(unittest.TestCase):
     def test_image_size_reads_png_dimensions(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "screen.png"
             path.write_bytes(tiny_png(7, 11))
 
-            self.assertEqual(manual_threads.image_size(path), (7, 11))
+            self.assertEqual(screenshot_bundles.image_size(path), (7, 11))
 
     def test_build_bundle_record_keeps_order_and_marks_duplicates(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -34,7 +34,7 @@ class ManualThreadsTests(unittest.TestCase):
             first.write_bytes(tiny_png())
             second.write_bytes(tiny_png())
 
-            record = manual_threads.build_bundle_record(
+            record = screenshot_bundles.build_bundle_record(
                 bundle_id="sample",
                 bundle_name="Sample",
                 input_paths=[first, second],
@@ -54,7 +54,7 @@ class ManualThreadsTests(unittest.TestCase):
             screenshot = root / "screen.png"
             screenshot.write_bytes(tiny_png())
             out = root / "manual"
-            record = manual_threads.build_bundle_record(
+            record = screenshot_bundles.build_bundle_record(
                 bundle_id="sample",
                 bundle_name="Sample",
                 input_paths=[screenshot],
@@ -62,7 +62,7 @@ class ManualThreadsTests(unittest.TestCase):
                 dry_run=False,
             )
 
-            bundle_path = manual_threads.write_bundle(record, [screenshot], out, force=False)
+            bundle_path = screenshot_bundles.write_bundle(record, [screenshot], out, force=False)
             written = json.loads(bundle_path.read_text(encoding="utf-8"))
             imported_path = resolve_portable_path(written["screenshots"][0]["imported_path"], root)
             bundle_exists = bundle_path.exists()
@@ -87,7 +87,7 @@ class ManualThreadsTests(unittest.TestCase):
             ],
         }
 
-        prompt = manual_threads.build_reconstruction_prompt(record)
+        prompt = screenshot_bundles.build_reconstruction_prompt(record)
 
         self.assertIn("logically stitch screenshots into scroll groups", prompt)
         self.assertIn("Images embedded inside visible X posts are embedded media", prompt)

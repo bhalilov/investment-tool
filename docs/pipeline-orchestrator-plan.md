@@ -119,8 +119,10 @@ Examples:
 - `check`
 - `doctor`
 - `x-raw`
-- media path repair
-- missing media recovery
+- `x-reindex`
+- `x-rerender`
+- `x-repair-media-paths`
+- `x-recover-media`
 
 ## State And Logs
 
@@ -264,6 +266,10 @@ explicit rebuild/manual stage:
 ```bash
 investment-tool workflow rebuild --stage articles
 ```
+
+Default article rebuild normalizes reviewed archive text without paid AI.
+Paid article AI requires explicit approval for reviewed or reuploaded archive
+input.
 
 ## Workflow Rebuild V1
 

@@ -30,6 +30,7 @@ committed.
 │   ├── articles/
 │   │   ├── archive/
 │   │   ├── records/
+│   │   ├── evidence/
 │   │   └── manifest.json
 │   └── screenshots/
 │       ├── inbox/
@@ -68,6 +69,7 @@ committed.
 | `feeds/x/usage` | `x-capture` | Local API usage estimates |
 | `feeds/articles/archive` | `articles` | Saved article archive input |
 | `feeds/articles/records` | `articles` | Normalized article feed records |
+| `feeds/articles/evidence` | `articles` | Derived article Markdown for local review |
 | `feeds/articles/manifest.json` | `articles` | Article ingest manifest |
 | `feeds/screenshots/inbox` | `screenshots` | Manual screenshot import inbox |
 | `feeds/screenshots/bundles` | `screenshots` | Imported screenshot bundle records |
@@ -79,7 +81,7 @@ committed.
 | `context/descriptions/screenshots` | `descriptions` | Planned OCR/visual-description JSON for manual screenshots |
 | `presentation/threads/x` | `render` | Local readable X thread HTML pages |
 | `presentation/indexes` | `render` | Browse indexes and browser-only owned ticker coloring |
-| `retrieval` | Retrieval/search | Future vector/search memory output; currently empty aside from folder notes |
+| `retrieval` | Retrieval/search | Future vector/search memory output |
 | `workflow/logs` | `workflow` | Plain workflow run logs, including `latest.log` |
 | `workflow/locks` | `workflow` | Plain stale-timeout lock files |
 
@@ -99,9 +101,8 @@ Some maintenance jobs may create short-lived staging folders such as
 steady-state tree and should be empty or absent after the maintenance job is
 verified.
 
-New code should read and write only the canonical layout above. Compatibility
-wrappers may still exist in code, but they should resolve to canonical runtime
-paths through `runtime/paths.py`.
+New code should read and write only the canonical layout above through
+`runtime/paths.py`.
 
 ## Repo Package Layout
 

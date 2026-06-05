@@ -17,7 +17,7 @@
       "user_prompt": "prompts/thread_pass1_user.md",
       "schema": "schemas/thread_pass1.schema.json",
       "max_output_tokens": 6000,
-      "use_vector_retrieval": true,
+      "use_vector_retrieval": false,
       "write_evidence": true,
       "sync_vector_after_write": true,
       "forbidden_outputs": [

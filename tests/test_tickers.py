@@ -1,9 +1,9 @@
 import unittest
 
-from investment_tool import ticker_parser
+from investment_tool.rules import tickers as ticker_parser
 
 
-class TickerParserTests(unittest.TestCase):
+class TickersTests(unittest.TestCase):
     def test_single_explicit_ticker_bucket_is_primary(self):
         self.assertEqual(ticker_parser.ticker_bucket_payload(["MU"]), {"primary_ticker": "MU"})
 

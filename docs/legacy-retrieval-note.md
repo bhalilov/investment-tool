@@ -1,29 +1,39 @@
-# Legacy Retrieval Note
+# Deleted Legacy Retrieval Note
 
-This note quarantines the existing vector sync code before the package refactor.
+The old vector sync and Custom GPT action server code have been removed from
+the active package. This note preserves the useful implementation ideas without
+making the old behavior part of the current architecture.
 
-## Status
+## Rejected Old Behavior
 
-Existing vector sync can generate Markdown evidence from captured X thread JSON
-and upload it to an OpenAI vector store. This is legacy utility code, not the
-current AI/vector architecture.
+The deleted sync generated Markdown evidence directly from captured X thread
+JSON and uploaded that to an OpenAI vector store. That evidence shape is
+rejected for the current design because pre-AI thread JSON is feed material, not
+clean analysis evidence.
 
-## Why It Is Legacy
+Do not rebuild the old raw/thread-derived Markdown upload path.
 
-The current AI/vector design says:
+## Mechanics Worth Reusing Later
 
-- Phase 1 thread AI does not use vector search before the AI call;
-- raw stripped JSON must not be uploaded as vector evidence;
-- clean dated evidence should be produced before vector upsert;
-- exact vector document shapes, search filters, and update/delete behavior are
-  still undecided.
+Future retrieval v2 may reuse these mechanics:
 
-## Refactor Rule
+- content hashing before upload;
+- manifest entries keyed by evidence document identity;
+- changed-file skip behavior;
+- OpenAI file upload followed by vector-store attachment;
+- vector-store file removal and file deletion when replacing old evidence;
+- compact metadata attributes such as feed, ticker, date, thread id, and media
+  presence.
 
-Move existing vector sync to `retrieval/legacy.py` and keep any direct command
-as a compatibility wrapper. Do not wire it into `workflow update`.
+## API Ideas Worth Reconsidering Later
 
-## Future Work
+The deleted local action server also had useful product ideas:
 
-A future retrieval module should be designed from `docs/ai-vector-pass-design.md`
-after the AI pass design is finalized.
+- search evidence;
+- read one reconstructed thread;
+- return ticker memory;
+- return a dated ticker timeline;
+- return recent signals.
+
+These are backlog ideas only. They should not be rebuilt until the evidence
+model and AI/vector design are finalized.

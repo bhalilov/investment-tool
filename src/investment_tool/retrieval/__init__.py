@@ -1,1 +1,1 @@
-"""Retrieval/search memory; current vector code is legacy."""
+"""Future retrieval/search memory package."""

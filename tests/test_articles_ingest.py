@@ -2,18 +2,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from investment_tool import hardcore_capture
+from investment_tool.feeds.articles import ingest as articles_ingest
 
 
-class HardcoreCaptureTests(unittest.TestCase):
+class ArticlesIngestTests(unittest.TestCase):
     def test_parse_article_date_accepts_archive_formats(self):
-        self.assertEqual(hardcore_capture.parse_article_date("25 May 2026"), "2026-05-25")
-        self.assertEqual(hardcore_capture.parse_article_date("May 25, 2026"), "2026-05-25")
+        self.assertEqual(articles_ingest.parse_article_date("25 May 2026"), "2026-05-25")
+        self.assertEqual(articles_ingest.parse_article_date("May 25, 2026"), "2026-05-25")
 
     def test_article_id_is_stable_and_filesystem_safe(self):
         item = {"index": 16, "title": "Infineon Technologies AG (IFX.DE, IFNNY)"}
         self.assertEqual(
-            hardcore_capture.article_id(item),
+            articles_ingest.article_id(item),
             "016__infineon-technologies-ag-ifx.de-ifnny",
         )
 
@@ -38,7 +38,7 @@ class HardcoreCaptureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "article.html"
             path.write_text(html, encoding="utf-8")
-            text, meta = hardcore_capture.extract_html_text(path)
+            text, meta = articles_ingest.extract_html_text(path)
 
         self.assertEqual(meta["html_title"], "AJ Article")
         self.assertIn("TSLA Update", text)
@@ -47,7 +47,7 @@ class HardcoreCaptureTests(unittest.TestCase):
         self.assertNotIn("display:none", text)
         self.assertIn("TSLA valuation corridor chart", meta["image_alt_texts"])
 
-    def test_markdown_marks_hardcore_articles_as_no_ocr(self):
+    def test_markdown_marks_articles_as_no_ocr(self):
         record = {
             "article_id": "001__example",
             "index": 1,
@@ -70,7 +70,7 @@ class HardcoreCaptureTests(unittest.TestCase):
             },
         }
 
-        markdown = hardcore_capture.render_markdown(record)
+        markdown = articles_ingest.render_markdown(record)
 
         self.assertIn("Feed Type: article", markdown)
         self.assertIn("OCR Used: false", markdown)

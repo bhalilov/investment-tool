@@ -13,7 +13,7 @@ from investment_tool.runtime.config import (
 )
 
 
-class FeedConfigTests(unittest.TestCase):
+class RuntimeConfigTests(unittest.TestCase):
     def test_x_feed_profile_loads_default_account(self):
         profile = load_x_feed_profile()
 

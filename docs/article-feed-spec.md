@@ -21,7 +21,8 @@ Article ingest:
 - applies configured cleanup regex patterns;
 - writes normalized article JSON;
 - writes Markdown evidence;
-- can run a text-only AI analysis unless disabled.
+- can run a text-only AI analysis only when explicitly approved for reviewed or
+  reuploaded archive input.
 
 ## Boundaries
 
@@ -34,3 +35,6 @@ Article ingest:
 
 Article ingest is not part of scheduled `workflow update` v1. It is run through
 explicit rebuild as stage `articles`.
+
+Default rebuild normalizes text without paid AI. Paid article AI requires an
+explicit article-analysis flag and should be treated as reviewed-input work.

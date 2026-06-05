@@ -3,10 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from investment_tool import media_analysis
+from investment_tool.context import descriptions as media_analysis
 
 
-class MediaAnalysisTests(unittest.TestCase):
+class DescriptionsTests(unittest.TestCase):
     def test_iter_media_paths_only_returns_supported_images_sorted(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

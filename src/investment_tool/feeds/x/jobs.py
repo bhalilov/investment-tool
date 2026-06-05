@@ -1,4 +1,4 @@
-"""X stage job wrappers used by workflow and legacy CLI entrypoints."""
+"""X stage job adapter used by the workflow orchestrator."""
 
 from __future__ import annotations
 
@@ -80,45 +80,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_legacy_x_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Capture configured X feed threads into readable local HTML files.")
-    add_x_common_args(parser)
-    parser.add_argument("--reindex-only", action="store_true", help="Regenerate indexes from cached JSON without X API calls")
-    parser.add_argument("--rerender-only", action="store_true", help="Regenerate thread HTML from cached JSON without X API calls")
-    parser.add_argument(
-        "--rebuild-from-raw-api",
-        action="store_true",
-        help="Rebuild generated thread JSON from saved raw API responses without calling X.",
-    )
-    parser.add_argument("--rebuild-staging-dir", default="", help="Where to write staged rebuilt JSON records.")
-    parser.add_argument(
-        "--replace-generated-json",
-        action="store_true",
-        help="After staging, delete/replace generated thread JSON and ignored JSON. Raw API and media are never deleted.",
-    )
-    parser.add_argument(
-        "--recover-missing-media-metadata",
-        action="store_true",
-        help="Use X API to refetch tweets whose media keys lack raw media metadata; download recovered photos only.",
-    )
-    parser.add_argument(
-        "--repair-media-paths",
-        action="store_true",
-        help="Repair cached thread JSON so media_paths only contains media referenced by that thread.",
-    )
-    parser.add_argument(
-        "--analyze",
-        action="store_true",
-        help="Deprecated. X capture no longer runs AI; use the configured AI pass pipeline instead.",
-    )
-    parser.add_argument(
-        "--no-analyze",
-        action="store_true",
-        help="Deprecated no-op kept for old command compatibility.",
-    )
-    return parser
-
-
 def load_x_context_from_args(args: argparse.Namespace) -> XCaptureContext:
     context = load_x_capture_context(args.feed_config, args.feed_id)
     apply_context_data_root(context)
@@ -127,32 +88,12 @@ def load_x_context_from_args(args: argparse.Namespace) -> XCaptureContext:
     return context
 
 
-def x_mode_from_legacy_args(args: argparse.Namespace) -> str:
-    if args.analyze:
-        print("capture_threads no longer runs AI. Use the configured AI pass pipeline for thread analysis.", file=sys.stderr)
-        return "invalid-analyze"
-    if args.repair_media_paths:
-        return "x-repair-media-paths"
-    if args.rebuild_from_raw_api:
-        return "x-raw-rebuild"
-    if args.reindex_only:
-        return "x-reindex"
-    if args.rerender_only:
-        return "x-rerender"
-    if args.recover_missing_media_metadata:
-        return "x-recover-media"
-    return "x-capture"
-
-
 def print_key_values(values: dict[str, object]) -> None:
     for key, value in values.items():
         print(f"{key.upper()}={value}")
 
 
 def run_x_action(args: argparse.Namespace, action: str) -> int:
-    if action == "invalid-analyze":
-        return 2
-
     env_path = Path.cwd() / ".env"
     load_env(env_path)
     context = load_x_context_from_args(args)
@@ -278,18 +219,13 @@ def run_x_action(args: argparse.Namespace, action: str) -> int:
     return 0
 
 
-def main_legacy_x_capture(argv: Sequence[str] | None = None) -> int:
-    parser = build_legacy_x_parser()
-    args = parser.parse_args(argv)
-    return run_x_action(args, x_mode_from_legacy_args(args))
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     argv = list(argv if argv is not None else sys.argv[1:])
-    if not argv or argv[0] not in X_ACTIONS:
-        return main_legacy_x_capture(argv)
     parser = build_parser()
     args = parser.parse_args(argv)
+    if not args.action:
+        parser.print_help()
+        return 0
     return run_x_action(args, args.action)
 
 

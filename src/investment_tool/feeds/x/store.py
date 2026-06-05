@@ -15,10 +15,6 @@ from investment_tool.rules.tickers import ticker_bucket_payload
 from investment_tool.rules.filters import primary_label
 from investment_tool.feeds.x.context import XCaptureContext
 from investment_tool.feeds.x.metadata import (
-    CATEGORY_VALUES,
-    PRIORITY_VALUES,
-    SIGNAL_VALUES,
-    STANCE_VALUES,
     analysis_field_payload,
     apply_pending_safe_summary,
     base_thread_metadata,
@@ -28,7 +24,6 @@ from investment_tool.feeds.x.metadata import (
     infer_tags,
     media_placeholder_tags,
     non_photo_media_placeholders,
-    normalize_enum,
     root_post_tickers,
     root_primary_tickers,
     rough_tldr,
@@ -204,10 +199,10 @@ def entries_from_cached_json(json_dir: Path, threads_dir: Path, context: XCaptur
                 "label": data.get("primary_label", "UNKNOWN"),
                 "tickers": tickers,
                 "tags": data.get("tags", []),
-                "priority": normalize_enum(data.get("priority"), PRIORITY_VALUES, ""),
-                "signal": normalize_enum(data.get("signal"), SIGNAL_VALUES, ""),
-                "category": normalize_enum(data.get("category"), CATEGORY_VALUES, ""),
-                "stance": normalize_enum(data.get("stance"), STANCE_VALUES, ""),
+                "priority": compact_text(str(data.get("priority") or ""), 64),
+                "signal": compact_text(str(data.get("signal") or ""), 64),
+                "category": compact_text(str(data.get("category") or ""), 64),
+                "stance": compact_text(str(data.get("stance") or ""), 64),
                 "actionability_score": data.get("actionability_score"),
                 "flags": data.get("flags", []),
                 "primary_ticker": data.get("primary_ticker") or (tickers[0] if tickers else "UNKNOWN"),

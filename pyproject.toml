@@ -6,14 +6,6 @@ description = "Local configurable investment research capture and analysis tool"
 
 [project.scripts]
 investment-tool = "investment_tool.cli.main:main"
-investment-tool-storage = "investment_tool.workflow.storage:main"
-investment-tool-x-capture = "investment_tool.cli.legacy_x_capture:main"
-investment-tool-hardcore-capture = "investment_tool.feeds.articles.ingest:main"
-investment-tool-market-prices = "investment_tool.context.prices:main"
-investment-tool-vector-sync = "investment_tool.retrieval.legacy:main"
-investment-tool-action-server = "investment_tool.retrieval.server:main"
-investment-tool-media-analysis = "investment_tool.context.descriptions:main"
-investment-tool-manual-thread-import = "investment_tool.feeds.screenshots.bundles:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -21,25 +21,6 @@ from investment_tool.feeds.x.context import XCaptureContext
 from investment_tool.feeds.x.threads import display_text, explicit_x_links, media_keys
 
 
-SIGNAL_VALUES = {"BUY_SIGNAL", "SELL_SIGNAL", "TRIM_SIGNAL", "HOLD_SIGNAL", "AVOID_SIGNAL", "WATCH_SIGNAL", "NO_ACTION"}
-CATEGORY_VALUES = {
-    "TRADE_ALERT",
-    "THESIS_UPDATE",
-    "VALUATION",
-    "PORTFOLIO_UPDATE",
-    "RISK_WARNING",
-    "MACRO",
-    "QUESTION_REPLY",
-    "RANT",
-    "BRAG",
-    "SELF_PROMO",
-    "OFF_TOPIC",
-}
-STANCE_VALUES = {"BULLISH", "BEARISH", "NEUTRAL", "MIXED", "UNCLEAR"}
-TIME_HORIZON_VALUES = {"IMMEDIATE", "DAYS", "WEEKS", "MONTHS", "YEARS", "UNCLEAR"}
-PRIORITY_VALUES = {"P0", "P1", "P2", "P3", "P4"}
-SCREENSHOT_IMPORTANCE_VALUES = {"NONE", "LOW", "IMPORTANT", "CRITICAL"}
-TONE_VALUES = {"LITERAL", "SARCASTIC", "MOCKING", "QUOTING_OTHER_VIEW", "UNCLEAR"}
 ANALYSIS_TOP_LEVEL_FIELDS = [
     "primary_ticker",
     "context_tickers",
@@ -182,11 +163,6 @@ def ignore_reason(
     )
 
 
-def normalize_enum(value: str | None, allowed: set[str], fallback: str) -> str:
-    normalized = re.sub(r"[^A-Z0-9]+", "_", str(value or "").upper()).strip("_")
-    return normalized if normalized in allowed else fallback
-
-
 def clamp_score(value: object) -> int:
     try:
         return max(0, min(100, int(round(float(value)))))
@@ -205,6 +181,10 @@ def text_list(value: object, limit: int = 6) -> list[str]:
         if len(cleaned) >= limit:
             break
     return cleaned
+
+
+def ai_text(value: object, limit: int = 80) -> str:
+    return compact_text(str(value or ""), limit)
 
 
 def base_thread_metadata(
@@ -228,7 +208,7 @@ def base_thread_metadata(
     normalized_label = primary if primary != "UNKNOWN" else label
     if normalized_label == "UNKNOWN":
         normalized_label = label
-    category = normalize_enum(existing.get("category"), CATEGORY_VALUES, "") if analysis_ready else ""
+    category = ai_text(existing.get("category")) if analysis_ready else ""
     flags = text_list(existing.get("flags"), 12) if analysis_ready else []
     preview_text = compact_text(str(existing.get("preview_text") or existing.get("capture_preview") or existing.get("tldr") or tldr), 420)
     return {
@@ -244,16 +224,16 @@ def base_thread_metadata(
         "primary_ticker": primary,
         "context_tickers": [],
         "mentioned_only_tickers": list(dict.fromkeys(mentioned_only)),
-        "signal": normalize_enum(existing.get("signal"), SIGNAL_VALUES, "") if analysis_ready else "",
+        "signal": ai_text(existing.get("signal")) if analysis_ready else "",
         "category": category,
-        "stance": normalize_enum(existing.get("stance"), STANCE_VALUES, "") if analysis_ready else "",
-        "time_horizon": normalize_enum(existing.get("time_horizon"), TIME_HORIZON_VALUES, "") if analysis_ready else "",
-        "tone": normalize_enum(existing.get("tone"), TONE_VALUES, "") if analysis_ready else "",
-        "priority": normalize_enum(existing.get("priority"), PRIORITY_VALUES, "") if analysis_ready else "",
+        "stance": ai_text(existing.get("stance")) if analysis_ready else "",
+        "time_horizon": ai_text(existing.get("time_horizon")) if analysis_ready else "",
+        "tone": ai_text(existing.get("tone")) if analysis_ready else "",
+        "priority": ai_text(existing.get("priority")) if analysis_ready else "",
         "actionability_score": clamp_score(existing.get("actionability_score")) if analysis_ready else None,
         "confidence": clamp_score(existing.get("confidence")) if analysis_ready else None,
         "screenshot_importance": (
-            normalize_enum(existing.get("screenshot_importance"), SCREENSHOT_IMPORTANCE_VALUES, "") if analysis_ready else ""
+            ai_text(existing.get("screenshot_importance")) if analysis_ready else ""
         ),
         "ocr_needed": bool(existing.get("ocr_needed", False)) if analysis_ready else None,
         "linked_context_required": bool(existing.get("linked_context_required", False)) if analysis_ready else None,

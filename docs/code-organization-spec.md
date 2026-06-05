@@ -24,36 +24,28 @@ This is the locked package and naming plan for the refactor.
 | `records/` | Canonical internal record shapes |
 | `context/` | Supporting context such as prices and image descriptions |
 | `analysis/` | Expensive AI passes and evidence generation |
-| `retrieval/` | Vector/search memory and quarantined legacy sync |
+| `retrieval/` | Future vector/search memory |
 | `presentation/` | HTML thread pages and indexes |
 | `rules/` | Ticker parsing and feed-neutral filtering |
 
-## Locked Module Names
+## Current Module Names
 
-| Current | New |
+| Area | Modules |
 | --- | --- |
-| `pipeline_orchestrator.py` | `workflow/run.py` plus `cli/main.py` |
-| `capture_threads.py` | `cli/legacy_x_capture.py` |
-| `x_client.py` | `feeds/x/api.py` |
-| `x_capture_job.py` | `feeds/x/capture.py` |
-| `x_raw_archive.py` | `feeds/x/raw.py` |
-| `x_raw_rebuild.py` | `feeds/x/rebuild.py` |
-| `x_thread_model.py` | `feeds/x/threads.py` and `feeds/x/media.py` |
-| `x_capture_metadata.py` | `feeds/x/metadata.py` |
-| `x_thread_store.py` | `feeds/x/store.py` |
-| `hardcore_capture.py` | `feeds/articles/ingest.py` |
-| `manual_threads.py` | `feeds/screenshots/bundles.py` and `feeds/screenshots/reconstruct.py` |
-| `market_prices.py` | `context/prices.py` |
-| `media_analysis.py` | `context/descriptions.py` |
-| `index_render.py` | `presentation/indexes.py` |
-| `x_thread_render.py` | `presentation/threads.py` |
-| `vector_store_sync.py` | `retrieval/legacy.py` |
-| `openai_api.py` | `analysis/openai.py` |
-| `feed_config.py` | `runtime/config.py` |
-| `runtime.py` | `runtime/env.py` |
-| `reporting.py` | `runtime/reporting.py` |
-| `ticker_parser.py` | `rules/tickers.py` |
-| `thread_filtering.py` | `rules/filters.py` |
+| CLI | `cli/main.py` |
+| Workflow | `workflow/run.py` |
+| Runtime | `runtime/env.py`, `runtime/config.py`, `runtime/paths.py`, `runtime/reporting.py` |
+| X feed | `feeds/x/api.py`, `feeds/x/capture.py`, `feeds/x/context.py`, `feeds/x/jobs.py`, `feeds/x/media.py`, `feeds/x/metadata.py`, `feeds/x/raw.py`, `feeds/x/rebuild.py`, `feeds/x/store.py`, `feeds/x/threads.py` |
+| Article feed | `feeds/articles/ingest.py` |
+| Screenshot feed | `feeds/screenshots/bundles.py`, `feeds/screenshots/reconstruct.py` |
+| Context | `context/prices.py`, `context/descriptions.py` |
+| Analysis | `analysis/openai.py` |
+| Presentation | `presentation/html.py`, `presentation/indexes.py`, `presentation/threads.py` |
+| Rules | `rules/tickers.py`, `rules/filters.py` |
+| Retrieval | Empty package reserved for future retrieval v2 |
+
+Deleted wrapper names and their extracted value are tracked in
+`docs/backlog.md`.
 
 ## Locked Stage Names
 
@@ -70,12 +62,12 @@ This is the locked package and naming plan for the refactor.
 
 ## Refactor Rule
 
-Move code first and preserve behavior first. Keep compatibility wrappers for old
-module paths and old commands during the transition.
+Compatibility wrappers and old direct commands were temporary. New code imports
+the package path that owns the behavior.
 
 ## Adapter Note
 
 `feeds/x/jobs.py` is the intentional adapter between the coordinate-only
-workflow runner and the X-specific stage commands. It owns legacy X CLI modes
-such as rerender, raw rebuild, media-path repair, and missing-media recovery so
-`workflow/run.py` does not contain X implementation details.
+workflow runner and the X-specific stage commands. It owns X maintenance
+actions such as rerender, raw rebuild, media-path repair, and missing-media
+recovery so `workflow/run.py` does not contain X implementation details.

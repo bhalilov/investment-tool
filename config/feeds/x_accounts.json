@@ -46,14 +46,6 @@
           "ghost.io",
           "aj-investment-research.ghost.io"
         ],
-        "legacy_evidence_headings": {
-          "feed_posts": [
-            "AJ Posts"
-          ],
-          "questions_answered": [
-            "Questions AJ Answered"
-          ]
-        },
         "coverage_notes": [
           "Frequently discusses AI, semiconductors, EVs, megacap tech, portfolio management, market indices, and share-price corridor/dashboard tools.",
           "Ticker/company identity may be implied by screenshots, prior context, or dashboard/tool references."

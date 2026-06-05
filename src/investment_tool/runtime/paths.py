@@ -195,28 +195,8 @@ class StoragePaths:
         return self.root / "retrieval"
 
     @property
-    def legacy_retrieval_root(self) -> Path:
-        return self.retrieval_root / "legacy"
-
-    @property
-    def legacy_x_root(self) -> Path:
-        return self.legacy_retrieval_root / "x"
-
-    @property
-    def legacy_x_evidence(self) -> Path:
-        return self.legacy_x_root / "evidence"
-
-    @property
-    def legacy_x_manifest(self) -> Path:
-        return self.legacy_x_root / "manifest.json"
-
-    @property
-    def legacy_articles_root(self) -> Path:
-        return self.legacy_retrieval_root / "articles"
-
-    @property
-    def legacy_articles_evidence(self) -> Path:
-        return self.legacy_articles_root / "evidence"
+    def articles_evidence(self) -> Path:
+        return self.articles_root / "evidence"
 
     @property
     def workflow_root(self) -> Path:
@@ -230,26 +210,6 @@ class StoragePaths:
     def workflow_locks(self) -> Path:
         return self.workflow_root / "locks"
 
-    @property
-    def storage_rename_manifest(self) -> Path:
-        return self.workflow_logs / "storage_rename_manifest.json"
-
-    @property
-    def legacy_root(self) -> Path:
-        return self.root / "legacy"
-
-    @property
-    def legacy_probes(self) -> Path:
-        return self.legacy_root / "probes"
-
-    @property
-    def legacy_unsorted(self) -> Path:
-        return self.legacy_root / "unsorted"
-
-    @property
-    def legacy_old_captures(self) -> Path:
-        return self.legacy_root / "old-captures"
-
     def ensure_runtime_dirs(self, include_planned: bool = False) -> None:
         folders = [
             self.x_raw,
@@ -259,6 +219,7 @@ class StoragePaths:
             self.x_usage,
             self.articles_archive,
             self.articles_records,
+            self.articles_evidence,
             self.screenshots_inbox,
             self.screenshots_bundles,
             self.screenshots_media,

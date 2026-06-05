@@ -18,13 +18,10 @@ The workflow layer is responsible for:
 investment-tool workflow update
 investment-tool workflow rebuild --stage render
 investment-tool workflow check
-investment-tool storage rename --verify-only
 ```
 
 ## Boundaries
 
 - `workflow/run.py` should not know X API details.
-- `workflow/storage.py` only renames/verifies local runtime folders and path
-  strings; it does not run capture, AI, or market-data jobs.
 - Stage implementation belongs in `feeds`, `context`, `presentation`,
   `analysis`, or `retrieval`.

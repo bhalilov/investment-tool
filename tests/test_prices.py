@@ -1,9 +1,9 @@
 import unittest
 
-from investment_tool import market_prices
+from investment_tool.context import prices as market_prices
 
 
-class MarketPriceTests(unittest.TestCase):
+class PricesTests(unittest.TestCase):
     def test_safe_symbol_normalizes_provider_symbols_for_filenames(self):
         self.assertEqual(market_prices.safe_symbol("IFX.DE"), "IFX_DE")
         self.assertEqual(market_prices.safe_symbol("BRK/B"), "BRK_B")

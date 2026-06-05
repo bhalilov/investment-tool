@@ -3,11 +3,7 @@
 Command entrypoints live here.
 
 `main.py` is the public command router for installed use. It loads `.env`, then
-routes to either workflow commands or storage maintenance.
-
-`legacy_x_capture.py` preserves old X-capture imports and command behavior
-during the refactor. It should stay thin: forward to `feeds.x` modules rather
-than adding new behavior.
+routes to workflow commands.
 
 ## Rules
 

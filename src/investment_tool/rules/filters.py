@@ -188,5 +188,5 @@ def infer_tags(
     return list(dict.fromkeys(tags))
 
 
-# Compatibility alias while old callers are phased out.
+# Shorter source-neutral name for callers that treat every feed item uniformly.
 source_items = feed_items

@@ -18,7 +18,7 @@ from typing import Sequence
 from investment_tool.runtime.env import load_env
 from investment_tool.runtime.paths import portable_path, storage_paths
 from investment_tool.runtime.reporting import start_reporter
-from investment_tool.feeds.x.jobs import main as main_x_job, run_x_action
+from investment_tool.feeds.x.jobs import run_x_action
 
 
 # Keep stage order explicit and boring. Scheduled update and manual rebuild have
@@ -253,12 +253,8 @@ def run_stage(stage: str, args: argparse.Namespace) -> StageResult:
 
             article_args = [
                 "--feed-config",
-                getattr(args, "feed_config", "config/feeds/x_accounts.json"),
-                "--feed-id",
-                getattr(args, "feed_id", ""),
+                "config/feeds/web_archives.json",
             ]
-            if getattr(args, "force", False):
-                article_args.append("--force-ai")
             code = articles_ingest.main(article_args)
         else:
             return StageResult(stage, "failed", 2, f"unknown stage: {stage}", started, iso_now())
@@ -375,7 +371,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     argv = list(argv if argv is not None else sys.argv[1:])
     if argv and argv[0] == "workflow":
         return run_workflow(argv[1:])
-    return main_x_job(argv)
+    return run_workflow(argv)
 
 
 if __name__ == "__main__":

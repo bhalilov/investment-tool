@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Ingest manually captured web-archive articles and optionally run AI analysis.
+"""Ingest manually captured web-archive articles.
 
 Current scope:
 - Read the existing manually downloaded HTML/PDF archive.
 - Extract text from saved HTML.
-- Run a text-only AI pass when requested.
+- Run a text-only AI pass only when explicitly approved.
 - Save normalized article JSON and Markdown evidence docs.
 
 Downloader/scraper support is intentionally a placeholder for now.
@@ -368,7 +368,7 @@ def markdown_list(values: Any) -> list[str]:
 
 def render_markdown(record: dict[str, Any]) -> str:
     analysis = record.get("analysis") if isinstance(record.get("analysis"), dict) else {}
-    title = clean_text(analysis.get("readable_title") or record.get("title") or "Hardcore Article")
+    title = clean_text(analysis.get("readable_title") or record.get("title") or "Archive Article")
     feed = record.get("feed") if isinstance(record.get("feed"), dict) else {}
     feed = feed if isinstance(feed, dict) else article_feed_record()
     lines = [
@@ -414,7 +414,7 @@ def render_markdown(record: dict[str, Any]) -> str:
 
 def download_placeholder(_: argparse.Namespace) -> None:
     raise NotImplementedError(
-        "Hardcore/Ghost downloading is intentionally manual for now. "
+        "Web archive downloading is intentionally manual for now. "
         "Add browser/scraper support here later."
     )
 
@@ -424,14 +424,15 @@ def process_articles(args: argparse.Namespace) -> int:
     archive_dir = resolve_portable_path(args.archive_dir) if args.archive_dir else storage.articles_archive
     output_dir = resolve_portable_path(args.output_dir) if args.output_dir else storage.articles_root
     article_json_dir = resolve_portable_path(args.records_dir) if args.records_dir else storage.articles_records
-    evidence_dir = resolve_portable_path(args.evidence_dir) if args.evidence_dir else storage.legacy_articles_evidence
+    evidence_dir = resolve_portable_path(args.evidence_dir) if args.evidence_dir else storage.articles_evidence
     manifest_path = resolve_portable_path(args.manifest) if args.manifest else storage.articles_manifest
     index = load_article_index(archive_dir)
     if args.limit:
         index = index[: args.limit]
     model = args.model or os.environ.get("OPENAI_HARDCORE_MODEL") or os.environ.get("OPENAI_ANALYSIS_MODEL") or DEFAULT_OPENAI_MODEL
+    run_ai = bool(args.analyze)
     existing_complete = 0
-    if article_json_dir.exists() and not args.force_ai:
+    if run_ai and article_json_dir.exists() and not args.force_ai:
         for item in index:
             aid = article_id(item)
             html_path = local_archive_path(archive_dir, str(item.get("htmlPath") or ""), "_html")
@@ -452,7 +453,7 @@ def process_articles(args: argparse.Namespace) -> int:
         every_items=5,
         every_seconds=30,
         mode="dry_run" if args.dry_run else "write",
-        analyze=str(not args.no_analyze).lower(),
+        analyze=str(run_ai).lower(),
         force_ai=str(args.force_ai).lower(),
         model=model,
         archive_dir=portable_path(archive_dir),
@@ -461,7 +462,7 @@ def process_articles(args: argparse.Namespace) -> int:
         evidence_dir=portable_path(evidence_dir),
         found_articles=len(index),
         already_analyzed=existing_complete,
-        pending_ai=max(0, len(index) - existing_complete) if not args.no_analyze else 0,
+        pending_ai=max(0, len(index) - existing_complete) if run_ai else 0,
         ocr="false",
         openai_usage_available="tokens_from_responses",
     )
@@ -498,7 +499,7 @@ def process_articles(args: argparse.Namespace) -> int:
             except json.JSONDecodeError:
                 existing = {}
         analysis = existing.get("analysis") if existing.get("fingerprint") == fingerprint and not args.force_ai else None
-        if args.no_analyze:
+        if not run_ai:
             stats["ai_skipped"] += 1
         elif analysis:
             stats["ai_skipped"] += 1
@@ -583,8 +584,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--env", default=".env")
     parser.add_argument("--model", default="")
     parser.add_argument("--limit", type=int, default=0)
-    parser.add_argument("--no-analyze", action="store_true", help="Only normalize HTML into JSON/Markdown; do not call OpenAI.")
-    parser.add_argument("--force-ai", action="store_true", help="Re-run AI even when article fingerprint is unchanged.")
+    parser.add_argument("--analyze", action="store_true", help="Run paid AI analysis for reviewed/reuploaded article input.")
+    parser.add_argument("--force-ai", action="store_true", help="With --analyze, re-run AI even when article fingerprint is unchanged.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--download", action="store_true", help="Placeholder only; downloading remains manual for now.")
     args = parser.parse_args(argv)
@@ -597,7 +598,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.records_dir:
         args.records_dir = str(article_feed_storage_path("records_dir", storage.articles_records))
     if not args.evidence_dir:
-        args.evidence_dir = str(article_feed_storage_path("evidence_dir", storage.legacy_articles_evidence))
+        args.evidence_dir = str(article_feed_storage_path("evidence_dir", storage.articles_evidence))
     if not args.manifest:
         args.manifest = str(article_feed_storage_path("manifest_path", storage.articles_manifest))
     if not args.output_dir:

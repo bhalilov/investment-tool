@@ -3,10 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from investment_tool import capture_threads
+from investment_tool.feeds.x import raw as x_raw
+from investment_tool.feeds.x import threads as x_threads
 
 
-class CaptureThreadsRawRebuildTests(unittest.TestCase):
+class XRawRebuildTests(unittest.TestCase):
     def test_load_raw_archive_reads_wrapped_response(self):
         with tempfile.TemporaryDirectory() as tmp:
             raw_dir = Path(tmp) / "raw_api" / "run"
@@ -35,7 +36,7 @@ class CaptureThreadsRawRebuildTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            tweets, users, media, stats = capture_threads.load_raw_api_archive(Path(tmp) / "raw_api")
+            tweets, users, media, stats = x_raw.load_raw_api_archive(Path(tmp) / "raw_api")
 
         self.assertIn("1", tweets)
         self.assertIn("2033476611149066240", users)
@@ -48,7 +49,7 @@ class CaptureThreadsRawRebuildTests(unittest.TestCase):
             (media_dir / "3_1.jpg").write_bytes(b"image")
             (media_dir / "3_2.png").write_bytes(b"image")
 
-            paths = capture_threads.existing_local_media_paths(media_dir)
+            paths = x_threads.existing_local_media_paths(media_dir)
 
         self.assertEqual(set(paths), {"3_1", "3_2"})
 
@@ -56,7 +57,7 @@ class CaptureThreadsRawRebuildTests(unittest.TestCase):
         items = [{"attachments": {"media_keys": ["3_1", "3_2"]}}]
         media = {"3_1": {"type": "photo"}, "3_2": {"type": "video"}}
 
-        missing = capture_threads.missing_media_keys(items, media, {"3_1": "/tmp/3_1.jpg"})
+        missing = x_threads.missing_media_keys(items, media, {"3_1": "/tmp/3_1.jpg"})
 
         self.assertEqual(missing, [{"media_key": "3_2", "type": "video", "has_metadata": True, "reason": "not_downloaded_or_unavailable"}])
 

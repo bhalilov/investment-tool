@@ -3,7 +3,7 @@ import unittest
 from investment_tool.runtime.reporting import format_report_line
 
 
-class ReportingTests(unittest.TestCase):
+class RuntimeReportingTests(unittest.TestCase):
     def test_vibe_is_bracket_prefix_not_payload_field(self):
         line = format_report_line(
             "CHECKPOINT",

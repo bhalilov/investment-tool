@@ -1,6 +1,6 @@
 import unittest
 
-from investment_tool import thread_filtering
+from investment_tool.rules import filters as thread_filtering
 
 
 def text_of(item):
@@ -15,7 +15,7 @@ def media_keys(item):
     return item.get("media_keys", [])
 
 
-class ThreadFilteringTests(unittest.TestCase):
+class FiltersTests(unittest.TestCase):
     def test_ignore_feed_reply_without_ticker_finance_link_or_media(self):
         config = thread_filtering.ThreadFilterConfig(
             feed_user_id="feed",
