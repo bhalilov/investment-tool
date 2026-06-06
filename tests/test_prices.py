@@ -248,6 +248,82 @@ class PricesTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("status=skipped_fresh", stdout.getvalue())
 
+    def test_fetch_from_override_preserves_existing_daily_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "config.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "start_date": "2026-03-01",
+                        "companies": [
+                            {
+                                "name": "Test",
+                                "primary": "TEST",
+                                "listings": [{"symbol": "TEST", "market": "US", "role": "primary"}],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            out = root / "context" / "prices" / "daily" / "TEST.json"
+            out.parent.mkdir(parents=True)
+            out.write_text(
+                json.dumps(
+                    {
+                        "synced_at": "2026-06-04T20:00:00+00:00",
+                        "provider": "fixture",
+                        "provider_interval": "1/day",
+                        "currency": "USD",
+                        "bars": [
+                            {"date": "2026-06-03", "close": 1},
+                            {"date": "2026-06-04", "close": 2},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_fetch(symbol, market, start, end, api_key, window):
+                self.assertEqual((symbol, market, start, end, window), ("TEST", "US", "2026-06-05", "2026-06-05", "daily"))
+                return [{"date": "2026-06-05", "open": 3, "high": 3, "low": 3, "close": 3, "adjusted_close": 3}], {
+                    "provider": "fixture",
+                    "provider_interval": "1/day",
+                    "currency": "USD",
+                }
+
+            with (
+                patch.object(market_prices, "fetch_listing", side_effect=fake_fetch),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                code = market_prices.main(
+                    [
+                        "--config",
+                        str(config),
+                        "--data-dir",
+                        str(root),
+                        "--window",
+                        "daily",
+                        "--incremental",
+                        "--fetch-from",
+                        "2026-06-05",
+                        "--from",
+                        "2026-03-01",
+                        "--to",
+                        "2026-06-05",
+                        "--env",
+                        str(root / "missing.env"),
+                    ]
+                )
+
+            payload = json.loads(out.read_text(encoding="utf-8"))
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["fetch_from"], "2026-06-05")
+        self.assertEqual(payload["from"], "2026-03-01")
+        self.assertEqual([row["date"] for row in payload["bars"]], ["2026-06-03", "2026-06-04", "2026-06-05"])
+
 
 if __name__ == "__main__":
     unittest.main()

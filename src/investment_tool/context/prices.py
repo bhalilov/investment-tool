@@ -483,12 +483,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--data-dir", default="")
     parser.add_argument("--from", dest="start", default="")
     parser.add_argument("--to", dest="end", default=dt.date.today().isoformat())
+    parser.add_argument(
+        "--fetch-from",
+        default="",
+        help="Override provider fetch start while preserving the stored window; requires --incremental.",
+    )
     parser.add_argument("--window", action="append", choices=tuple(WINDOWS), default=[], help="Sync only this window; repeatable.")
     parser.add_argument("--limit-listings", type=int, default=0, help="Limit listing count for smoke tests.")
     parser.add_argument("--env", default=".env")
     parser.add_argument("--sleep", type=float, default=13.0, help="Seconds between Massive requests.")
     parser.add_argument("--incremental", action="store_true", help="Merge only due/missing recent bars instead of full window refresh.")
     args = parser.parse_args(argv)
+    if args.fetch_from and not args.incremental:
+        parser.error("--fetch-from requires --incremental so existing history is preserved.")
+    if args.fetch_from and parse_date(args.fetch_from) > parse_date(args.end):
+        parser.error("--fetch-from cannot be after --to.")
 
     load_env(Path(args.env))
     api_key = os.environ.get("MASSIVE_API_KEY", "").strip()
@@ -532,6 +541,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "companies": [],
         "errors": [],
         "incremental": bool(args.incremental),
+        "fetch_from_override": args.fetch_from or None,
     }
     last_massive = 0.0
     fx_cache: dict[str, tuple[dict[str, float], dict[str, Any]]] = {}
@@ -568,7 +578,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 window_dir = getattr(storage, str(WINDOWS[window]["storage_attr"]))
                 out_path = window_dir / f"{safe_symbol(symbol)}.json"
                 existing_payload = load_existing_price_payload(out_path) if args.incremental else None
-                if args.incremental and is_incremental_fresh(existing_payload, out_path, window, dt.datetime.now(dt.timezone.utc)):
+                if args.incremental and not args.fetch_from and is_incremental_fresh(existing_payload, out_path, window, dt.datetime.now(dt.timezone.utc)):
                     existing_rows = (existing_payload or {}).get("bars") or []
                     listing_record["windows"].append(
                         {
@@ -596,6 +606,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     continue
                 fetch_start = incremental_fetch_start(existing_payload, window, window_start) if args.incremental else window_start
+                if args.fetch_from:
+                    fetch_start = max(window_start, args.fetch_from)
                 if api_key and should_try_massive(symbol, market):
                     elapsed = time.monotonic() - last_massive
                     if elapsed < args.sleep:
