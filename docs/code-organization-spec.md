@@ -25,6 +25,7 @@ This is the locked package and naming plan for the refactor.
 | `context/` | Supporting context such as prices and image descriptions |
 | `analysis/` | Expensive AI passes and evidence generation |
 | `retrieval/` | Future vector/search memory |
+| `interfaces/` | External access surfaces such as MCP, Custom GPT APIs, and app connectors |
 | `presentation/` | HTML thread pages and indexes |
 | `rules/` | Ticker parsing and feed-neutral filtering |
 
@@ -40,6 +41,7 @@ This is the locked package and naming plan for the refactor.
 | Screenshot feed | `feeds/screenshots/bundles.py`, `feeds/screenshots/reconstruct.py` |
 | Context | `context/prices.py`, `context/descriptions.py` |
 | Analysis | `analysis/openai.py` |
+| Interfaces | Reserved for MCP, Custom GPT APIs, and future external access modules |
 | Presentation | `presentation/html.py`, `presentation/indexes.py`, `presentation/threads.py` |
 | Rules | `rules/tickers.py`, `rules/filters.py` |
 | Retrieval | Empty package reserved for future retrieval v2 |

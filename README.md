@@ -47,6 +47,7 @@ Main package layout:
 | `context/` | Supporting context such as prices and image descriptions |
 | `analysis/` | Shared OpenAI helpers and future AI passes |
 | `retrieval/` | Future retrieval memory |
+| `interfaces/` | Future external access surfaces such as MCP and Custom GPT APIs |
 | `presentation/` | HTML thread pages and indexes |
 | `rules/` | Feed-neutral parsing/filtering rules |
 | `records/` | Canonical record shapes, as they become explicit |

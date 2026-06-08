@@ -17,6 +17,7 @@ the implementation map.
 | `context/` | Supporting context such as prices and image descriptions | Feed capture |
 | `analysis/` | Shared AI/OpenAI helpers and future expensive AI passes | Capture side effects |
 | `retrieval/` | Future retrieval memory | New capture logic |
+| `interfaces/` | External API surfaces such as MCP and Custom GPT | Core pipeline behavior |
 | `presentation/` | HTML pages and indexes | Record reconstruction |
 | `rules/` | Feed-neutral ticker parsing and filtering | Feed-specific API code |
 | `records/` | Future explicit record model definitions | Ad hoc job code |
