@@ -124,12 +124,11 @@ V1 scheduled update stage order:
 
 1. `x-capture`
 2. `screenshots`
-3. `prices`
-4. `descriptions`
-5. `render`
+3. `descriptions`
+4. `render`
 
-`articles` and `x-raw` are explicit/manual stages in v1, not part of the normal
-scheduled update.
+`prices`, `articles`, and `x-raw` are explicit/manual stages in v1, not part
+of the normal scheduled update.
 
 ## Current Rules
 
@@ -176,6 +175,8 @@ docs and should be treated as the source of truth when changing that area.
 
 | Spec | Use it for |
 | --- | --- |
+| `docs/architecture-overview.md` | High-level system map and product architecture |
+| `docs/workstreams.md` | Parallel worktree/workstream ownership |
 | `docs/pipeline-orchestrator-plan.md` | Workflow commands, stage order, logs, locks, scheduler model |
 | `docs/ai-vector-pass-design.md` | Postponed thread AI/vector design, pass 1/pass 2 boundaries |
 | `docs/code-organization-spec.md` | Package hierarchy and naming rules |
