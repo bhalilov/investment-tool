@@ -129,7 +129,7 @@ def prepare_x_capture_paths(run_id: str, feed_root: str | Path | None = None) ->
         raw_dir=root / "raw" / run_id,
         json_dir=root / "records",
         media_dir=root / "media",
-        threads_dir=storage.x_threads_html,
+        threads_dir=storage.x_thread_pages,
         presentation_root=storage.presentation_root,
     )
     for folder in (

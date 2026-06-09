@@ -33,8 +33,8 @@ Postponed but designed separately:
 ## Core Architecture
 
 The code is organized around a simple rule: folder context carries meaning.
-That means we use `feeds/x/api.py`, not names like `x_x_api.py`, and runtime
-data uses `feeds/x/records`, not repeated old names like `x_threads/thread_json`.
+That means feed-specific code lives under folders such as `feeds/x/`, while
+runtime records live under the matching canonical data folders.
 
 Main package layout:
 

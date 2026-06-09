@@ -12,7 +12,7 @@ old code.
 
 | Legacy piece | Extracted value | Replacement path | Deletion condition |
 | --- | --- | --- | --- |
-| Root wrapper modules such as `capture_threads.py`, `market_prices.py`, `ticker_parser.py`, and `x_*` wrappers | Confirmed no unique logic; they only re-exported new modules | Import new package paths directly | Delete now |
+| Deleted root wrapper modules | Confirmed no unique logic; they only re-exported current modules | Import current package paths directly | Done |
 | Old direct console scripts such as `investment-tool-x-capture`, `investment-tool-vector-sync`, and script launchers | Direct command names were transitional only | `investment-tool workflow ...` and explicit module tests | Delete now |
 | Legacy X CLI flags | Raw rebuild, rerender, reindex, media-path repair, missing-media recovery are still useful maintenance jobs | Workflow stages and the internal `feeds/x/jobs.py` adapter | Keep behavior, delete old flag parser |
 | Legacy vector sync | Useful mechanics: content hashing, manifest mapping, OpenAI file upload, vector-store attach, changed-file skip, old-file delete | Future retrieval v2 implementation, after AI/vector design is final | Delete old implementation now |

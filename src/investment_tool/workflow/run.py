@@ -350,13 +350,6 @@ def run_workflow_check(command: str) -> int:
         "workflow_logs": paths.workflow_logs,
         "workflow_locks": paths.workflow_locks,
     }
-    legacy_checks = {
-        "legacy_x_threads": root / "x_threads",
-        "legacy_manual_threads": root / "manual_threads",
-        "legacy_market_prices": root / "market_prices",
-        "legacy_hardcore": root / "hardcore",
-        "legacy_pipeline": root / "pipeline",
-    }
     print(f"WORKFLOW_CHECK={command}")
     missing = 0
     for name, path in checks.items():
@@ -365,13 +358,6 @@ def run_workflow_check(command: str) -> int:
         print(f"{name.upper()} path={portable_path(path)} exists={str(exists).lower()} items={count}")
         if name != "data_root" and not exists:
             missing += 1
-    legacy_present = 0
-    for name, path in legacy_checks.items():
-        exists = path.exists()
-        count = len(list(path.iterdir())) if exists and path.is_dir() else 0
-        if exists:
-            legacy_present += 1
-        print(f"{name.upper()} path={portable_path(path)} exists={str(exists).lower()} items={count}")
     x_verify = verify_x_records(paths.x_records)
     print(
         f"X_RECORD_VERIFY records={x_verify['records']} invalid_json={x_verify['invalid_json']} "
@@ -382,7 +368,6 @@ def run_workflow_check(command: str) -> int:
     for warning in x_verify["warnings"][:20]:
         print(f"X_RECORD_WARNING {json_like(warning)}")
     print(f"MISSING_PATHS={missing}")
-    print(f"LEGACY_PATHS_PRESENT={legacy_present}")
     return 1 if x_verify["violation_count"] else 0
 
 
