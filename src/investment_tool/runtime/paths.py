@@ -58,8 +58,6 @@ def data_root_for_x_root(value: str | Path) -> Path:
     path = resolve_portable_path(text) if text.startswith((DATA_TOKEN, REPO_TOKEN)) else resolve_path(value)
     if path.name == "x" and path.parent.name == "feeds":
         return path.parent.parent
-    if path.name == "x_threads":
-        return path.parent
     return runtime_data_root()
 
 
@@ -183,7 +181,7 @@ class StoragePaths:
         return self.root / "presentation"
 
     @property
-    def x_threads_html(self) -> Path:
+    def x_thread_pages(self) -> Path:
         return self.presentation_root / "threads" / "x"
 
     @property
@@ -227,7 +225,7 @@ class StoragePaths:
             self.prices_daily,
             self.x_descriptions,
             self.screenshot_descriptions,
-            self.x_threads_html,
+            self.x_thread_pages,
             self.indexes,
             self.workflow_logs,
             self.workflow_locks,
